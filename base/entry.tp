@@ -1,0 +1,42 @@
+{
+  "sdk": 6,
+  "version": 1000,
+  "name": "Touch Portal Hardware Monitor",
+  "id": "TP_HM",
+  "plugin_start_cmd": "\"%TP_PLUGIN_FOLDER%touchportal-hardwaremonitor\\touchportal-hardwaremonitor.exe\"",
+  "configuration": {
+    "colorDark": "#225834",
+    "colorLight": "#45b168"
+  },
+  "settings":[
+    {
+      "name":"Hardware Monitor To Use",
+      "default":"root/LibreHardwareMonitor",
+      "type":"text"
+    },
+    {
+      "name":"Sensor Capture Time (ms)",
+      "default":"2000",
+      "type":"number",
+      "maxLength":4,
+      "minValue":1000,
+      "maxValue":9999
+    },
+    {
+      "name":"Temperature Unit (C/F)",
+      "default":"C",
+      "type":"text",
+      "maxLength":1
+    }
+  ],
+  "categories": [
+    {
+      "id": "TP_OHM",
+      "name": "TP Hardware Monitor Info",
+      "imagepath": "%TP_PLUGIN_FOLDER%touchportal-hardwaremonitor\\touchportal-hardwaremonitor.png",
+      "actions": [ ],
+      "states": [ ],
+      "events": [ ]
+    }
+  ]
+}
