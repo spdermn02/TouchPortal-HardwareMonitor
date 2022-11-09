@@ -25,7 +25,7 @@ Read Data from Open Hardware Monitor or Libre Hardware Monitor, get all data fro
 
 ## Current Sensors and Values Available
 
-With this rewrite, all current sensor data that is available in Open Hardware Monitor or Libre Hardware Monitor is going to be made available dynamically to you as a plugin state.  There are some generalized states you can use if you plan on sharing the pages you create, but just know not everybody is going to have the same PC configuration as you.
+With this rewrite, all current sensor data that is available in Open Hardware Monitor or Libre Hardware Monitor is going to be made available dynamically to you as a plugin state.  **TODO**:There are some generalized states you can use if you plan on sharing the pages you create, but just know not everybody is going to have the same PC configuration as you.
 
 ## Getting Started
 If you use Touch Portal and are interested in having a "dashboard" display of your computer statistics, these instructions will help get that setup for you.
