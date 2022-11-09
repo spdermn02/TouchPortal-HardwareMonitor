@@ -17,6 +17,11 @@ Read Data from Open Hardware Monitor or Libre Hardware Monitor, get all data fro
   - [Examples](#examples)
     - [Display Memory Usage](#display-memory-usage)
     - [Display CPU Usage and Temperature](#display-cpu-usage-and-temperature)
+  - [Build It](#build-it)
+  - [Versioning](#versioning)
+  - [Authors](#authors)
+  - [License](#license)
+  - [Acknowledgments](#acknowledgments)
 
 ## Current Sensors and Values Available
 
@@ -93,3 +98,25 @@ Button:
 <br><br>
 Event: This generates the dynamic gauge icon
 ![CPU Load Dynamic Icon Event](resources/CPU-Gauge-Event.png)
+
+## Build It
+If you are looking to build it yourself instead of the pre-setup .tpp file
+1) Clone the Repository
+2) `npm run build` to kick off and package the binary into a .tpp file ready to import to touch portal
+
+## Versioning
+
+We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/spdermn02/tpohm_plugin/tags).
+
+## Authors
+
+- **Jameson Allen** - _Initial work_ - [Spdermn02](https://github.com/spdermn02)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+
+## Acknowledgments
+
+- Thank you to Open Hardware Monitor/Libre Hardware Monitor for writing your statstics somewhere accessible
+- Thank you to Ty and Reinier for creating and developing Touch Portal
