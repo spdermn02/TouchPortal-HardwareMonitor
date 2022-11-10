@@ -1,5 +1,6 @@
 const wmi = require("node-wmi")
 const TouchPortalApi = require("touchportal-api")
+const { open } = require("out-url")
 const Constants = require('./consts')
 
 // Create an instance of the Touch Portal Client
@@ -81,7 +82,6 @@ const startCapture = () => {
           return
         }
         if( typeof sensorData === 'object' ) {
-          console.log(JSON.stringify(sensorData,null,2))
             for( let i = 0; i < sensorData.length; i++ ){
                 const sensor = sensorData[i]
                 const hardwareKey = sensor.Parent
@@ -91,16 +91,18 @@ const startCapture = () => {
                   sensor.Value = (sensor.Value * 9.0 / 5.0 ) + 32.0
                 }
                 sensor.Value = parseFloat(sensor.Value).toFixed(1)
+                
                 if( hardware[hardwareKey].Sensors[sensor.Identifier] == undefined ) {
+                    sensor.StateId.defaultValue  = sensor.Value;
                     hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
                     //createStateArray
                     sensorStateArray.push(sensor.StateId)
-                    //addToStateUpdateArray
+
+                    //updateStateArray - even though we send defaultValue, we need this so any Events are fired
                     stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
                 }
                 else{
                     if( hardware[hardwareKey].Sensors[sensor.Identifier].Value !== sensor.Value ){
-                        //console.log('DIFF:',stateId, 'Old:', hardware[hardwareKey].Sensors[sensor.Identifier].Value, 'New:', sensor.Value)
                         hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
                         //addToStateUpdateArray
                         stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
@@ -137,5 +139,18 @@ TPClient.on("Info", data => {
   TPClient.logIt("DEBUG","Info: received initial connect from Touch-Portal")
 })
 
+TPClient.on("Update", (curVersion,newVersion) => {
+  TPClient.logIt("DEBUG","Update: there is an update curVersion:",curVersion,"newVersion:",newVersion)
+  TPClient.sendNotification(`${pluginId}_update_notification_${newVersion}`,`Hardware Monitor Plugin Update Available`,
+  `\nNew Version: ${newVersion}\n\nPlease updated to get the latest bug fixes and new features\n\nCurrent Installed Version: ${curVersion}`,
+  [{id: `${pluginId}_update_notification_go_to_download`, title: "Go To Download Location" }]
+);
+});
 
-TPClient.connect({ pluginId });
+TPClient.on("NotificationClicked", (data) => {
+  if( data.optionId === `${pluginId}_update_notification_go_to_download`) {
+    open(Constants.releaseUrl);
+  }
+});
+
+TPClient.connect({ pluginId, updateUrl:Constants.updateUrl });

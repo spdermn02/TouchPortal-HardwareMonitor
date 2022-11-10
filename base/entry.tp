@@ -1,6 +1,6 @@
 {
   "sdk": 6,
-  "version": 1000,
+  "version": 1001,
   "name": "Touch Portal Hardware Monitor",
   "id": "TP_HM",
   "plugin_start_cmd": "\"%TP_PLUGIN_FOLDER%touchportal-hardwaremonitor\\touchportal-hardwaremonitor.exe\"",
@@ -18,9 +18,9 @@
       "name":"Sensor Capture Time (ms)",
       "default":"2000",
       "type":"number",
-      "maxLength":4,
-      "minValue":1000,
-      "maxValue":9999
+      "maxLength":5,
+      "minValue":500,
+      "maxValue":99999
     },
     {
       "name":"Temperature Unit (C/F)",
