@@ -7,6 +7,7 @@ const TPClient = new TouchPortalApi.Client()
 
 // Define a pluginId, matches your entry.tp file
 const pluginId = Constants.pluginId
+const updateUrl = 'https://raw.githubusercontent.com/spdermn02/TouchPortal-HardwareMonitor/main/package.json'
 
 let prevCaptureInterval = 2000  //ms capture time interval
 
@@ -81,7 +82,6 @@ const startCapture = () => {
           return
         }
         if( typeof sensorData === 'object' ) {
-          console.log(JSON.stringify(sensorData,null,2))
             for( let i = 0; i < sensorData.length; i++ ){
                 const sensor = sensorData[i]
                 const hardwareKey = sensor.Parent
@@ -91,16 +91,15 @@ const startCapture = () => {
                   sensor.Value = (sensor.Value * 9.0 / 5.0 ) + 32.0
                 }
                 sensor.Value = parseFloat(sensor.Value).toFixed(1)
+                
                 if( hardware[hardwareKey].Sensors[sensor.Identifier] == undefined ) {
                     hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
+                    sensor.defaultValue  = sensor.Value;
                     //createStateArray
                     sensorStateArray.push(sensor.StateId)
-                    //addToStateUpdateArray
-                    stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
                 }
                 else{
                     if( hardware[hardwareKey].Sensors[sensor.Identifier].Value !== sensor.Value ){
-                        //console.log('DIFF:',stateId, 'Old:', hardware[hardwareKey].Sensors[sensor.Identifier].Value, 'New:', sensor.Value)
                         hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
                         //addToStateUpdateArray
                         stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
@@ -138,4 +137,4 @@ TPClient.on("Info", data => {
 })
 
 
-TPClient.connect({ pluginId });
+TPClient.connect({ pluginId, updateUrl });
