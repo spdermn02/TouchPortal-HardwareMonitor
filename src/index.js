@@ -93,10 +93,13 @@ const startCapture = () => {
                 sensor.Value = parseFloat(sensor.Value).toFixed(1)
                 
                 if( hardware[hardwareKey].Sensors[sensor.Identifier] == undefined ) {
+                    sensor.StateId.defaultValue  = sensor.Value;
                     hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
-                    sensor.defaultValue  = sensor.Value;
                     //createStateArray
                     sensorStateArray.push(sensor.StateId)
+
+                    //updateStateArray - even though we send defaultValue, we need this so any Events are fired
+                    stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
                 }
                 else{
                     if( hardware[hardwareKey].Sensors[sensor.Identifier].Value !== sensor.Value ){

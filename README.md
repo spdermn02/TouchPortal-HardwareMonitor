@@ -17,6 +17,7 @@ Read Data from Open Hardware Monitor or Libre Hardware Monitor, get all data fro
   - [Examples](#examples)
     - [Display Memory Usage](#display-memory-usage)
     - [Display CPU Usage and Temperature](#display-cpu-usage-and-temperature)
+  - [ChangeLog](#changelog)
   - [Build It](#build-it)
   - [Versioning](#versioning)
   - [Authors](#authors)
@@ -25,7 +26,7 @@ Read Data from Open Hardware Monitor or Libre Hardware Monitor, get all data fro
 
 ## Current Sensors and Values Available
 
-With this rewrite, all current sensor data that is available in Open Hardware Monitor or Libre Hardware Monitor is going to be made available dynamically to you as a plugin state.  **TODO**:There are some generalized states you can use if you plan on sharing the pages you create, but just know not everybody is going to have the same PC configuration as you.
+With this rewrite, all current sensor data that is available in Open Hardware Monitor or Libre Hardware Monitor is going to be made available dynamically to you as a plugin state.  The state id's themselves are fairly "generic" in regards to hardware they reference it by type of hardware not specifically the exact hardware names. So sharing pages is still possible but note that 1 cpu based computers could only utilize one portion of a page if it was created from a 2 cpu based computer. (if that makes sense)
 
 ## Getting Started
 If you use Touch Portal and are interested in having a "dashboard" display of your computer statistics, these instructions will help get that setup for you.
@@ -98,6 +99,18 @@ Button:
 <br><br>
 Event: This generates the dynamic gauge icon
 ![CPU Load Dynamic Icon Event](resources/CPU-Gauge-Event.png)
+
+## ChangeLog
+```
+1.0.0 - Initial Release
+1.0.1 - Bug Fixes and Update Notification addition
+      - Bugs: 
+         - removed some left over log messages
+      - Additions:
+         - added in Update Notification Process for post 1.0.1 releases
+         - changed Sensor Capture Interval times to be allowed 500(ms) to 99999(ms)
+      - Documentation:
+         - Corrected statements about generalized states being needed to share pages
 
 ## Build It
 If you are looking to build it yourself instead of the pre-setup .tpp file
