@@ -120,3 +120,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Thank you to Open Hardware Monitor/Libre Hardware Monitor for writing your statstics somewhere accessible
 - Thank you to Ty and Reinier for creating and developing Touch Portal
+- Thank you to Sora for testing this out for me.
