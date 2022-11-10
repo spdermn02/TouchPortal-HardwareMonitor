@@ -111,7 +111,7 @@ Event: This generates the dynamic gauge icon
          - changed Sensor Capture Interval times to be allowed 500(ms) to 99999(ms)
       - Documentation:
          - Corrected statements about generalized states being needed to share pages
-
+```
 ## Build It
 If you are looking to build it yourself instead of the pre-setup .tpp file
 1) Clone the Repository
