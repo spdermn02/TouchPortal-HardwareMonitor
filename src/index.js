@@ -1,5 +1,6 @@
 const wmi = require("node-wmi")
 const TouchPortalApi = require("touchportal-api")
+const { open } = require("out-url")
 const Constants = require('./consts')
 
 // Create an instance of the Touch Portal Client
@@ -7,7 +8,6 @@ const TPClient = new TouchPortalApi.Client()
 
 // Define a pluginId, matches your entry.tp file
 const pluginId = Constants.pluginId
-const updateUrl = 'https://raw.githubusercontent.com/spdermn02/TouchPortal-HardwareMonitor/main/package.json'
 
 let prevCaptureInterval = 2000  //ms capture time interval
 
@@ -136,5 +136,18 @@ TPClient.on("Info", data => {
   TPClient.logIt("DEBUG","Info: received initial connect from Touch-Portal")
 })
 
+TPClient.on("Update", (curVersion,newVersion) => {
+  TPClient.logIt("DEBUG","Update: there is an update curVersion:",curVersion,"newVersion:",newVersion)
+  TPClient.sendNotification(`${pluginId}_update_notification_${newVersion}`,`Hardware Monitor Plugin Update Available`,
+  `\nNew Version: ${newVersion}\n\nPlease updated to get the latest bug fixes and new features\n\nCurrent Installed Version: ${curVersion}`,
+  [{id: `${pluginId}_update_notification_go_to_download`, title: "Go To Download Location" }]
+);
+});
 
-TPClient.connect({ pluginId, updateUrl });
+TPClient.on("NotificationClicked", (data) => {
+  if( data.optionId === `${pluginId}_update_notification_go_to_download`) {
+    open(Constants.releaseUrl);
+  }
+});
+
+TPClient.connect({ pluginId, updateUrl:Constants.updateUrl });
