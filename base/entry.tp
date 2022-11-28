@@ -29,7 +29,7 @@
       "maxLength":1
     },
     {
-      "name":"Normalize Throughput (KB/s, MB/s, GB/s)",
+      "name":"Normalize Throughput (B/s, KB/s, MB/s, GB/s)",
       "default":"No",
       "type":"text",
       "maxLength":3
