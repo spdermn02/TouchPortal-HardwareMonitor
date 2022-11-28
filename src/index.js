@@ -65,6 +65,23 @@ const buildSensorStateId = (hardwareKey, sensorInfo) => {
     return { id: sensorStateId, desc: sensorStateDesc, defaultValue: '0', parentGroup: `${parentGroup}` };
 }
 
+const runSensorConversions = (sensor) => {
+  if( sensor.SensorType === 'Temperature' && pluginSettings[Constants.TEMP_READOUT_SETTING] === 'F') {
+    sensor.Value = (sensor.Value * 9.0 / 5.0 ) + 32.0
+  }
+  else if( sensor.SensorType === 'Throughput' && sensor.Value > 0.0 && pluginSettings[Constants.NORMALIZE_THROUGHPUT].toLowerCase() === 'yes') {
+    let currValue = sensor.Value
+    let count = 0
+    while( currValue > 1024.0 ) {
+      currValue = currValue / 1024.0
+      count++
+    }
+    const unit = count == 3 ? "GB/s" : count == 2 ? "MB/s" : count == 1 ? "KB/s" : "B/s"
+    sensor.Value = currValue
+    sensor.Unit = unit
+  }
+}
+
 const startCapture = () => {
   if( sensorCapture ) {
     clearInterval(sensorCapture)
@@ -88,21 +105,9 @@ const startCapture = () => {
                 const hardwareKey = sensor.Parent
                 const stateId = buildSensorStateId(hardwareKey, sensor)
                 sensor.StateId = stateId
-                if( sensor.SensorType === 'Temperature' && pluginSettings[Constants.TEMP_READOUT_SETTING] === 'F') {
-                  sensor.Value = (sensor.Value * 9.0 / 5.0 ) + 32.0
-                }
                 
-                if( sensor.SensorType === 'Throughput' && sensor.Value > 0.0 && pluginSettings[Constants.NORMALIZE_THROUGHPUT].toLowerCase() === 'yes') {
-                  let currValue = sensor.Value
-                  let count = 0
-                  while( currValue > 1024.0 ) {
-                    currValue = currValue / 1024.0
-                    count++
-                  }
-                  const unit = count == 3 ? "GB/s" : count == 2 ? "MB/s" : "KB/s"
-                  sensor.Value = currValue
-                  sensor.Unit = unit
-                }
+                runSensorConversions(sensor)
+
                 sensor.Value = parseFloat(sensor.Value).toFixed(1)
 
                 if( hardware[hardwareKey].Sensors[sensor.Identifier] == undefined ) {
