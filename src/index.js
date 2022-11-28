@@ -12,7 +12,6 @@ const pluginId = Constants.pluginId
 let prevCaptureInterval = 2000  //ms capture time interval
 
 const hardware  = {}
-const hardwareTypes = {}
 const pluginSettings = {
   [Constants.CAPTURE_INTERVAL_SETTING] : prevCaptureInterval,
   [Constants.TEMP_READOUT_SETTING]: 'C',
@@ -22,8 +21,7 @@ let firstRun = 1
 let sensorCapture = undefined
 
 const buildHardwareList = () => {
-  hardware = {}
-  hardwareTypes = {}
+  const hardwareTypes = {}
   wmi.Query(
     {
       namespace: "root/LibreHardwareMonitor",
