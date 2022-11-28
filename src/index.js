@@ -69,7 +69,7 @@ const runSensorConversions = (sensor) => {
   if( sensor.SensorType === 'Temperature' && pluginSettings[Constants.TEMP_READOUT_SETTING] === 'F') {
     sensor.Value = (sensor.Value * 9.0 / 5.0 ) + 32.0
   }
-  else if( sensor.SensorType === 'Throughput' && sensor.Value > 0.0 && pluginSettings[Constants.NORMALIZE_THROUGHPUT].toLowerCase() === 'yes') {
+  else if( sensor.SensorType === 'Throughput' && pluginSettings[Constants.NORMALIZE_THROUGHPUT].toLowerCase() === 'yes') {
     let currValue = sensor.Value
     let count = 0
     while( currValue > 1024.0 ) {
