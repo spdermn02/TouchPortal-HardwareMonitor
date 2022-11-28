@@ -15,12 +15,15 @@ const hardware  = {}
 const hardwareTypes = {}
 const pluginSettings = {
   [Constants.CAPTURE_INTERVAL_SETTING] : prevCaptureInterval,
-  [Constants.TEMP_READOUT_SETTING]: 'C'
+  [Constants.TEMP_READOUT_SETTING]: 'C',
+  [Constants.NORMALIZE_THROUGHPUT]: 'No'
 }
 let firstRun = 1
 let sensorCapture = undefined
 
 const buildHardwareList = () => {
+  hardware = {}
+  hardwareTypes = {}
   wmi.Query(
     {
       namespace: "root/LibreHardwareMonitor",
@@ -90,8 +93,20 @@ const startCapture = () => {
                 if( sensor.SensorType === 'Temperature' && pluginSettings[Constants.TEMP_READOUT_SETTING] === 'F') {
                   sensor.Value = (sensor.Value * 9.0 / 5.0 ) + 32.0
                 }
-                sensor.Value = parseFloat(sensor.Value).toFixed(1)
                 
+                if( sensor.SensorType === 'Throughput' && sensor.Value > 0.0 && pluginSettings[Constants.NORMALIZE_THROUGHPUT].toLowerCase() === 'yes') {
+                  let currValue = sensor.Value
+                  let count = 0
+                  while( currValue > 1024.0 ) {
+                    currValue = currValue / 1024.0
+                    count++
+                  }
+                  const unit = count == 3 ? "GB/s" : count == 2 ? "MB/s" : "KB/s"
+                  sensor.Value = currValue
+                  sensor.Unit = unit
+                }
+                sensor.Value = parseFloat(sensor.Value).toFixed(1)
+
                 if( hardware[hardwareKey].Sensors[sensor.Identifier] == undefined ) {
                     sensor.StateId.defaultValue  = sensor.Value;
                     hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
@@ -100,12 +115,25 @@ const startCapture = () => {
 
                     //updateStateArray - even though we send defaultValue, we need this so any Events are fired
                     stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
+                    if( sensor.Unit !== undefined ) {
+                      let unitSensor = {
+                        id: sensor.StateId.id+".unit",
+                        desc: sensor.StateId.desc + " Unit",
+                        defaultValue: "UKN/s",
+                        parentGroup: sensor.StateId.parentGroup
+                      };
+                      sensorStateArray.push(unitSensor)
+                      stateUpdateArray.push({'id': sensor.StateId.id+".unit", 'value': sensor.Unit})
+                    }
                 }
                 else{
                     if( hardware[hardwareKey].Sensors[sensor.Identifier].Value !== sensor.Value ){
                         hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
                         //addToStateUpdateArray
                         stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
+                        if( sensor.Unit !== undefined ) {
+                          stateUpdateArray.push({'id': sensor.StateId.id+".unit", 'value': sensor.Unit})
+                        }
                     }
                 }
             }
@@ -130,7 +158,6 @@ TPClient.on("Settings", (data) => {
   })
   if( prevCaptureInterval != pluginSettings[Constants.CAPTURE_INTERVAL_SETTING] ) {
     prevCaptureInterval = pluginSettings[Constants.CAPTURE_INTERVAL_SETTING]
-    startCapture()
   }
   buildHardwareList()
 })
