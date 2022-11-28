@@ -111,6 +111,12 @@ Event: This generates the dynamic gauge icon
          - changed Sensor Capture Interval times to be allowed 500(ms) to 99999(ms)
       - Documentation:
          - Corrected statements about generalized states being needed to share pages
+1.1.0 - Adding in a new Setting
+      - Additions:
+         - New Setting for Normalizing Throughput units
+         - Creates new Unit state when setting set to 'Yes'
+            - Divides unit by 1024 until it is less than 1024, and counts how many times it did that division to determine KB/s, MB/s, GB/s
+            - new Unit state is not created if this setting is 'No' initially.
 ```
 ## Build It
 If you are looking to build it yourself instead of the pre-setup .tpp file

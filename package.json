@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "bin": "src/index.js",
   "scripts": {
+    "start": "node src/index.js",
     "build": "node scripts/build.js"
   },
   "keywords": [
