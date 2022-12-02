@@ -80,6 +80,10 @@ There are currently 3 settings for this plugin
 3) `Temperature Unit (C/F)` - Which Temperature Scale to use
    1) Default: C
    2) Valid Values: `C` or `F`
+4) `Normalize Throughput (B/s, KB/s, MB/s, GB/s)` - Normalize Throughput values to smaller more Visually pleasing values
+   1) Default: No
+   2) Valid Values: `No` or `Yes`
+   3) How: This takes the throughput values and divides by 1024, until the value is less than 1024, counts how many times it does the calc to know Unit, will now create a unit based state as well for those that are converted 
 
 ## Examples
 
@@ -111,6 +115,12 @@ Event: This generates the dynamic gauge icon
          - changed Sensor Capture Interval times to be allowed 500(ms) to 99999(ms)
       - Documentation:
          - Corrected statements about generalized states being needed to share pages
+1.1.0 - Adding in a new Setting
+      - Additions:
+         - New Setting for Normalizing Throughput units
+         - Creates new Unit state when setting set to 'Yes'
+            - Divides unit by 1024 until it is less than 1024, and counts how many times it did that division to determine KB/s, MB/s, GB/s
+            - new Unit state is not created if this setting is 'No' initially.
 ```
 ## Build It
 If you are looking to build it yourself instead of the pre-setup .tpp file

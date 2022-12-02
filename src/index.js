@@ -12,15 +12,16 @@ const pluginId = Constants.pluginId
 let prevCaptureInterval = 2000  //ms capture time interval
 
 const hardware  = {}
-const hardwareTypes = {}
 const pluginSettings = {
   [Constants.CAPTURE_INTERVAL_SETTING] : prevCaptureInterval,
-  [Constants.TEMP_READOUT_SETTING]: 'C'
+  [Constants.TEMP_READOUT_SETTING]: 'C',
+  [Constants.NORMALIZE_THROUGHPUT]: 'No'
 }
 let firstRun = 1
 let sensorCapture = undefined
 
 const buildHardwareList = () => {
+  const hardwareTypes = {}
   wmi.Query(
     {
       namespace: "root/LibreHardwareMonitor",
@@ -34,15 +35,17 @@ const buildHardwareList = () => {
       if( typeof hardwareData === 'object' ) {
           for( let i = 0; i < hardwareData.length; i++ ){
               const key = hardwareData[i].Identifier
-              hardware[key] = hardwareData[i]
-              hardware[key].HardwareType = hardware[key].HardwareType.toLowerCase().replace(/gpu.*/,'GPU').toUpperCase()
-              hardware[key].Index = parseInt(hardware[key].Identifier.toLowerCase().replace(/.*\/([0-9]+)/,'$1'),10)
-              hardwareTypes[hardware[key].HardwareType] = hardwareTypes[hardware[key].HardwareType] != undefined ? hardwareTypes[hardware[key].HardwareType] + 1 : 1;
-              if( isNaN(hardware[key].Index) ) {
-                hardware[key].Index = hardwareTypes[hardware[key].HardwareType]
+              if( hardware[key] === undefined ) {
+                hardware[key] = hardwareData[i]
+                hardware[key].HardwareType = hardware[key].HardwareType.toLowerCase().replace(/gpu.*/,'GPU').toUpperCase()
+                hardware[key].Index = parseInt(hardware[key].Identifier.toLowerCase().replace(/.*\/([0-9]+)/,'$1'),10)
+                hardwareTypes[hardware[key].HardwareType] = hardwareTypes[hardware[key].HardwareType] != undefined ? hardwareTypes[hardware[key].HardwareType] + 1 : 1;
+                if( isNaN(hardware[key].Index) ) {
+                  hardware[key].Index = hardwareTypes[hardware[key].HardwareType]
+                }
+                
+                hardware[key].Sensors = {}
               }
-              
-              hardware[key].Sensors = {}
           }
           
       }
@@ -62,6 +65,33 @@ const buildSensorStateId = (hardwareKey, sensorInfo) => {
     parentGroup = `${parentGroup} - ${hardware[hardwareKey].Name}`
     const sensorStateDesc = `${parentGroup} - ${sensorType} - ${sensorNameStr}`
     return { id: sensorStateId, desc: sensorStateDesc, defaultValue: '0', parentGroup: `${parentGroup}` };
+}
+
+const runSensorConversions = (sensor) => {
+  if( sensor.SensorType === 'Temperature' && pluginSettings[Constants.TEMP_READOUT_SETTING] === 'F') {
+    sensor.Value = (sensor.Value * 9.0 / 5.0 ) + 32.0
+  }
+  else if( sensor.SensorType === 'Throughput' && pluginSettings[Constants.NORMALIZE_THROUGHPUT].toLowerCase() === 'yes') {
+    let currValue = sensor.Value
+    let count = 0
+    while( currValue > 1024.0 ) {
+      currValue = currValue / 1024.0
+      count++
+    }
+    const unit = getThroughputUnit(count)
+    sensor.Value = currValue
+    sensor.Unit = unit
+  }
+}
+
+const getThroughputUnit = (count) => {
+  let unitScale = ""
+  switch(count) {
+    case 3: unitScale="G"; break;
+    case 2: unitScale="M"; break;
+    case 1: unitScale="K"; break;
+  }
+  return unitScale+"B/s"
 }
 
 const startCapture = () => {
@@ -87,11 +117,11 @@ const startCapture = () => {
                 const hardwareKey = sensor.Parent
                 const stateId = buildSensorStateId(hardwareKey, sensor)
                 sensor.StateId = stateId
-                if( sensor.SensorType === 'Temperature' && pluginSettings[Constants.TEMP_READOUT_SETTING] === 'F') {
-                  sensor.Value = (sensor.Value * 9.0 / 5.0 ) + 32.0
-                }
-                sensor.Value = parseFloat(sensor.Value).toFixed(1)
                 
+                runSensorConversions(sensor)
+
+                sensor.Value = parseFloat(sensor.Value).toFixed(1)
+
                 if( hardware[hardwareKey].Sensors[sensor.Identifier] == undefined ) {
                     sensor.StateId.defaultValue  = sensor.Value;
                     hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
@@ -100,12 +130,25 @@ const startCapture = () => {
 
                     //updateStateArray - even though we send defaultValue, we need this so any Events are fired
                     stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
+                    if( sensor.Unit !== undefined ) {
+                      let unitSensor = {
+                        id: sensor.StateId.id+".unit",
+                        desc: sensor.StateId.desc + " Unit",
+                        defaultValue: "UKN/s",
+                        parentGroup: sensor.StateId.parentGroup
+                      };
+                      sensorStateArray.push(unitSensor)
+                      stateUpdateArray.push({'id': sensor.StateId.id+".unit", 'value': sensor.Unit})
+                    }
                 }
                 else{
                     if( hardware[hardwareKey].Sensors[sensor.Identifier].Value !== sensor.Value ){
                         hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
                         //addToStateUpdateArray
                         stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
+                        if( sensor.Unit !== undefined ) {
+                          stateUpdateArray.push({'id': sensor.StateId.id+".unit", 'value': sensor.Unit})
+                        }
                     }
                 }
             }
@@ -130,7 +173,6 @@ TPClient.on("Settings", (data) => {
   })
   if( prevCaptureInterval != pluginSettings[Constants.CAPTURE_INTERVAL_SETTING] ) {
     prevCaptureInterval = pluginSettings[Constants.CAPTURE_INTERVAL_SETTING]
-    startCapture()
   }
   buildHardwareList()
 })
