@@ -35,15 +35,17 @@ const buildHardwareList = () => {
       if( typeof hardwareData === 'object' ) {
           for( let i = 0; i < hardwareData.length; i++ ){
               const key = hardwareData[i].Identifier
-              hardware[key] = hardwareData[i]
-              hardware[key].HardwareType = hardware[key].HardwareType.toLowerCase().replace(/gpu.*/,'GPU').toUpperCase()
-              hardware[key].Index = parseInt(hardware[key].Identifier.toLowerCase().replace(/.*\/([0-9]+)/,'$1'),10)
-              hardwareTypes[hardware[key].HardwareType] = hardwareTypes[hardware[key].HardwareType] != undefined ? hardwareTypes[hardware[key].HardwareType] + 1 : 1;
-              if( isNaN(hardware[key].Index) ) {
-                hardware[key].Index = hardwareTypes[hardware[key].HardwareType]
+              if( hardware[key] === undefined ) {
+                hardware[key] = hardwareData[i]
+                hardware[key].HardwareType = hardware[key].HardwareType.toLowerCase().replace(/gpu.*/,'GPU').toUpperCase()
+                hardware[key].Index = parseInt(hardware[key].Identifier.toLowerCase().replace(/.*\/([0-9]+)/,'$1'),10)
+                hardwareTypes[hardware[key].HardwareType] = hardwareTypes[hardware[key].HardwareType] != undefined ? hardwareTypes[hardware[key].HardwareType] + 1 : 1;
+                if( isNaN(hardware[key].Index) ) {
+                  hardware[key].Index = hardwareTypes[hardware[key].HardwareType]
+                }
+                
+                hardware[key].Sensors = {}
               }
-              
-              hardware[key].Sensors = {}
           }
           
       }
@@ -76,10 +78,20 @@ const runSensorConversions = (sensor) => {
       currValue = currValue / 1024.0
       count++
     }
-    const unit = count == 3 ? "GB/s" : count == 2 ? "MB/s" : count == 1 ? "KB/s" : "B/s"
+    const unit = getThroughputUnit(count)
     sensor.Value = currValue
     sensor.Unit = unit
   }
+}
+
+const getThroughputUnit = (count) => {
+  let unitScale = ""
+  switch(count) {
+    case 3: unitScale="G"; break;
+    case 2: unitScale="M"; break;
+    case 1: unitScale="K"; break;
+  }
+  return unitScale+"B/s"
 }
 
 const startCapture = () => {
