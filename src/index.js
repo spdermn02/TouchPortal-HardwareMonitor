@@ -24,7 +24,7 @@ const buildHardwareList = () => {
   const hardwareTypes = {}
   wmi.Query(
     {
-      namespace: "root/LibreHardwareMonitor",
+      namespace: pluginSettings[Constants.SENSOR_DATA_SOURCE],
       class: "Hardware",
     },
     function (err, hardwareData) {

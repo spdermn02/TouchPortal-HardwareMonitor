@@ -121,6 +121,9 @@ Event: This generates the dynamic gauge icon
          - Creates new Unit state when setting set to 'Yes'
             - Divides unit by 1024 until it is less than 1024, and counts how many times it did that division to determine KB/s, MB/s, GB/s
             - new Unit state is not created if this setting is 'No' initially.
+1.1.1 - Bug Fix
+      - Bug:
+         - Fixed the setting for where Sensor data comes from to actually use what you have in the settings, it was accidentally left as Hardcoded to LHM instead of allowing it to be overridden by the plugin settings value
 ```
 ## Build It
 If you are looking to build it yourself instead of the pre-setup .tpp file
