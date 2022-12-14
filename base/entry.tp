@@ -1,6 +1,6 @@
 {
   "sdk": 6,
-  "version": 1102,
+  "version": 1103,
   "name": "Touch Portal Hardware Monitor",
   "id": "TP_HM",
   "plugin_start_cmd": "\"%TP_PLUGIN_FOLDER%touchportal-hardwaremonitor\\touchportal-hardwaremonitor.exe\"",
