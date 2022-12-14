@@ -123,6 +123,9 @@ Event: This generates the dynamic gauge icon
             - new Unit state is not created if this setting is 'No' initially.
 1.1.1 - Bug Fix
       - Bug:
+         - Fixed the setting for where Hardware data comes from to actually use what you have in the settings, it was accidentally left as Hardcoded to LHM instead of allowing it to be overridden by the plugin settings value
+1.1.2 - Bug Fix
+      - Bug:
          - Fixed the setting for where Sensor data comes from to actually use what you have in the settings, it was accidentally left as Hardcoded to LHM instead of allowing it to be overridden by the plugin settings value
 ```
 ## Build It

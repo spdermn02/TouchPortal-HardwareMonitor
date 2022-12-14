@@ -40,7 +40,9 @@ const buildHardwareList = () => {
                 hardware[key].HardwareType = hardware[key].HardwareType.toLowerCase().replace(/gpu.*/,'GPU').toUpperCase()
                 hardware[key].Index = parseInt(hardware[key].Identifier.toLowerCase().replace(/.*\/([0-9]+)/,'$1'),10)
                 hardwareTypes[hardware[key].HardwareType] = hardwareTypes[hardware[key].HardwareType] != undefined ? hardwareTypes[hardware[key].HardwareType] + 1 : 1;
-                if( isNaN(hardware[key].Index) ) {
+                console.log(JSON.stringify(hardware[key]))
+                console.log(hardware[key].Index)
+                if( hardware[key].Index == null || isNaN(hardware[key].Index) ) {
                   hardware[key].Index = hardwareTypes[hardware[key].HardwareType]
                 }
                 
@@ -58,7 +60,8 @@ const buildSensorStateId = (hardwareKey, sensorInfo) => {
     const sensorType = sensorInfo.SensorType
     const sensorName = sensorInfo.Name.toLowerCase().replace(/ /g,'.').replace(/#/g,'')
     const sensorNameStr = sensorInfo.Name
-    const indexNum = isNaN(hardware[hardwareKey].Index) ? '' : hardware[hardwareKey].Index
+    console.log(hardwareKey)
+    const indexNum = hardware[hardwareKey].Index == null || isNaN(hardware[hardwareKey].Index) ? '' : hardware[hardwareKey].Index
     const sensorStateId = `tp-hm.state.${hardware[hardwareKey].HardwareType}${indexNum}.${sensorType}.${sensorName}`
     let parentGroup = `${hardware[hardwareKey].HardwareType}`
     parentGroup = indexNum !== ''  ? `${parentGroup} ${indexNum}` : `${parentGroup}`
@@ -103,7 +106,7 @@ const startCapture = () => {
     let stateUpdateArray = [];
     wmi.Query(
       {
-        namespace: "root/LibreHardwareMonitor",
+        namespace: pluginSettings[Constants.SENSOR_DATA_SOURCE],
         class: "Sensor",
       },
       function (err, sensorData) {
@@ -114,6 +117,7 @@ const startCapture = () => {
         if( typeof sensorData === 'object' ) {
             for( let i = 0; i < sensorData.length; i++ ){
                 const sensor = sensorData[i]
+                console.log(JSON.stringify(sensor))
                 const hardwareKey = sensor.Parent
                 const stateId = buildSensorStateId(hardwareKey, sensor)
                 sensor.StateId = stateId
