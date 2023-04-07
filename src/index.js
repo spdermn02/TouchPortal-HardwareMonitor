@@ -18,10 +18,13 @@ const pluginSettings = {
   [Constants.NORMALIZE_THROUGHPUT]: 'No'
 }
 let firstRun = 1
+let waitTime = 1000
+let MAX_WAIT_TIME
 let sensorCapture = undefined
 
 const buildHardwareList = () => {
   const hardwareTypes = {}
+  TPClient.logIt("DEBUG","Attempting to select for data source",pluginSettings[Constants.SENSOR_DATA_SOURCE],"class Hardware" )
   wmi.Query(
     {
       namespace: pluginSettings[Constants.SENSOR_DATA_SOURCE],
@@ -29,7 +32,13 @@ const buildHardwareList = () => {
     },
     function (err, hardwareData) {
       if( err ) {
-        TPClient.logIt('ERROR','An error has occurred reading hardware data:', err)
+        TPClient.logIt('ERROR','An error has occurred reading hardware data:', err, 'will try again')
+        if ( waitTime > Constants.MAX_WAIT_TIME ) {
+            TPClient.logIt('ERROR','attempted to read hardware data failed 60 times, check if your Hardware Monitor is running')
+            return
+        }
+        setTimeout(() => { buildHardwareList() }, waitTime);
+        waitTime = waitTime + 1000
         return
       }
       if( typeof hardwareData === 'object' ) {
@@ -52,9 +61,14 @@ const buildHardwareList = () => {
       startCapture()
     }
   );
+  return
 }
 
 const buildSensorStateId = (hardwareKey, sensorInfo) => {
+  if( hardware[hardwareKey] == null ) {
+    TPClient.logIt("ERROR","Unknown hardware key present", hardwareKey,"and hasn't been seen before")
+    return { id: 'unknown', desc:'unknown', defaultValue: '0', parentGroup: 'UNKNOWN'};
+  }
     const sensorType = sensorInfo.SensorType
     const sensorName = sensorInfo.Name.toLowerCase().replace(/ /g,'.').replace(/#/g,'')
     const sensorNameStr = sensorInfo.Name
