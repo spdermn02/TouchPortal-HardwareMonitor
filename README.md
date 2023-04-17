@@ -130,6 +130,12 @@ Event: This generates the dynamic gauge icon
 1.1.3 - Bug Fix
       - Bug: 
          - Removed useless logging left in from v1.1.2 testing
+1.1.4 - Bug Fix
+      - Bug:
+         - Read hardware attempts multiple tries before dying.
+1.1.5 - Bug Fix
+      - Bug:
+         - Make sure that each sensor has unique Identifier name, as some appear to use the same base name
 ```
 ## Build It
 If you are looking to build it yourself instead of the pre-setup .tpp file

@@ -126,11 +126,13 @@ const startCapture = () => {
           return
         }
         if( typeof sensorData === 'object' ) {
-            for( let i = 0; i < sensorData.length; i++ ){
-                const sensor = sensorData[i]
+            for(const sensor of sensorData){
                 const hardwareKey = sensor.Parent
                 const stateId = buildSensorStateId(hardwareKey, sensor)
                 sensor.StateId = stateId
+                // Apparently some sensors use the same Identifier, so throwing Name on them
+                // To force uniqueness
+                sensor.Identifier = sensor.Identifier + "/" + sensor.Name.toLowerCase().replace(/ /g,'.')
                 
                 runSensorConversions(sensor)
 
