@@ -33,6 +33,12 @@
       "default":"No",
       "type":"text",
       "maxLength":3
+    },
+    {
+      "name":"Normalize Data ( MB, GB)",
+      "default":"No",
+      "type":"text",
+      "maxLength":3
     }
   ],
   "categories": [
