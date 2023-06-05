@@ -84,6 +84,10 @@ There are currently 3 settings for this plugin
    1) Default: No
    2) Valid Values: `No` or `Yes`
    3) How: This takes the throughput values and divides by 1024, until the value is less than 1024, counts how many times it does the calc to know Unit, will now create a unit based state as well for those that are converted 
+5) `Normalize Data (MB, GB)` - Normalize SmallData values to smaller more Visually pleasing values
+   1) Default: No
+   2) Valid Values: `No` or `Yes`
+   3) How: This takes the SmallData values and divides by 1024, until the value is less than 1024, counts how many times it does the calc to know Unit, will now create a unit based state as well for those that are converted 
 
 ## Examples
 
@@ -135,7 +139,11 @@ Event: This generates the dynamic gauge icon
          - Read hardware attempts multiple tries before dying.
 1.1.5 - Bug Fix
       - Bug:
-         - Make sure that each sensor has unique Identifier name, as some appear to use the same base name
+         - Make sure that each sensor has unique Identifier name, as some appear to use the same base name+
+1.2.0 - Data conversion Feature
+      - Feature:
+         - Added in SmallData conversion for things like Video Card RAM and any other sensor that is small data type.
+            -Note: This is controlled by a setting that is default No, to turn on go to the Plugin Settings in Touch Portal and change the value to Yes
 ```
 ## Build It
 If you are looking to build it yourself instead of the pre-setup .tpp file

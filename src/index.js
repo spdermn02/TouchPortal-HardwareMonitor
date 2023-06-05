@@ -15,7 +15,8 @@ const hardware  = {}
 const pluginSettings = {
   [Constants.CAPTURE_INTERVAL_SETTING] : prevCaptureInterval,
   [Constants.TEMP_READOUT_SETTING]: 'C',
-  [Constants.NORMALIZE_THROUGHPUT]: 'No'
+  [Constants.NORMALIZE_THROUGHPUT]: 'No',
+  [Constants.NORMALIZE_DATA]: 'No'
 }
 let firstRun = 1
 let waitTime = 1000
@@ -96,16 +97,31 @@ const runSensorConversions = (sensor) => {
     sensor.Value = currValue
     sensor.Unit = unit
   }
+  else if( sensor.SensorType === 'SmallData' && pluginSettings[Constants.NORMALIZE_DATA].toLowerCase() === 'yes') {
+    let currValue = sensor.Value
+    let count = 2 //Start at 2 because Libre Hardware Monitor already reads these as MB at minimum - TODO: Check Open Hardware Monitor
+    while( currValue > 1024.0 ) {
+      currValue = currValue / 1024.0
+      count++
+    }
+    const unit = getUnit(count)
+    sensor.Value = currValue;
+    sensor.Unit = unit
+    console.log(JSON.stringify(sensor))
+  }
 }
-
-const getThroughputUnit = (count) => {
+const getUnit = (count) => {
   let unitScale = ""
   switch(count) {
     case 3: unitScale="G"; break;
     case 2: unitScale="M"; break;
     case 1: unitScale="K"; break;
   }
-  return unitScale+"B/s"
+  return unitScale+"B";
+}
+
+const getThroughputUnit = (count) => {
+  return getUnit(count)+"/s"
 }
 
 const startCapture = () => {
@@ -136,7 +152,7 @@ const startCapture = () => {
                 
                 runSensorConversions(sensor)
 
-                sensor.Value = parseFloat(sensor.Value).toFixed(1)
+                sensor.Value = sensor.Value % 1 !== 0 ? parseFloat(sensor.Value).toFixed(1) : sensor.Value
 
                 if( hardware[hardwareKey].Sensors[sensor.Identifier] == undefined ) {
                     sensor.StateId.defaultValue  = sensor.Value;

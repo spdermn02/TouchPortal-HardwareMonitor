@@ -1,6 +1,6 @@
 {
   "sdk": 6,
-  "version": 1105,
+  "version": 1200,
   "name": "Touch Portal Hardware Monitor",
   "id": "TP_HM",
   "plugin_start_cmd": "\"%TP_PLUGIN_FOLDER%touchportal-hardwaremonitor\\touchportal-hardwaremonitor.exe\"",
@@ -30,6 +30,12 @@
     },
     {
       "name":"Normalize Throughput (B/s, KB/s, MB/s, GB/s)",
+      "default":"No",
+      "type":"text",
+      "maxLength":3
+    },
+    {
+      "name":"Normalize Data (MB, GB)",
       "default":"No",
       "type":"text",
       "maxLength":3
