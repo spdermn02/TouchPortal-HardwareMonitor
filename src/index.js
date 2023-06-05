@@ -16,7 +16,7 @@ const pluginSettings = {
   [Constants.CAPTURE_INTERVAL_SETTING] : prevCaptureInterval,
   [Constants.TEMP_READOUT_SETTING]: 'C',
   [Constants.NORMALIZE_THROUGHPUT]: 'No',
-  [Constants.NORMALIZE_DATA]: 'Yes'
+  [Constants.NORMALIZE_DATA]: 'No'
 }
 let firstRun = 1
 let waitTime = 1000
