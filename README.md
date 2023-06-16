@@ -144,6 +144,12 @@ Event: This generates the dynamic gauge icon
       - Feature:
          - Added in SmallData conversion for things like Video Card RAM and any other sensor that is small data type.
             -Note: This is controlled by a setting that is default No, to turn on go to the Plugin Settings in Touch Portal and change the value to Yes
+1.2.1 - Bug Fixes and minor Enhancement
+      - Bug: 
+         - Fixed data processing for small data, and removed extra log
+      - Enhancement:
+         - Hardware is now sorted by type then name, to keep it consistent between restarts of the plugin.
+
 ```
 ## Build It
 If you are looking to build it yourself instead of the pre-setup .tpp file
