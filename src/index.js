@@ -43,6 +43,9 @@ const buildHardwareList = () => {
         return
       }
       if( typeof hardwareData === 'object' ) {
+          hardwareData.sort((a,b) => {
+            return a.HardwareType.toUpperCase() < b.HardwareType.toUpperCase() ? -1 : a.HardwareType.toUpperCase() > b.HardwareType.toUpperCase() ? 1 : a.Name.toUpperCase() < b.Name.toUpperCase() ? -1 : a.Name.toUpperCase() > b.Name.toUpperCase() ? 1 : 0
+          })
           for( let i = 0; i < hardwareData.length; i++ ){
               const key = hardwareData[i].Identifier
               if( hardware[key] === undefined ) {
@@ -107,7 +110,6 @@ const runSensorConversions = (sensor) => {
     const unit = getUnit(count)
     sensor.Value = currValue;
     sensor.Unit = unit
-    console.log(JSON.stringify(sensor))
   }
 }
 const getUnit = (count) => {
@@ -166,7 +168,7 @@ const startCapture = () => {
                       let unitSensor = {
                         id: sensor.StateId.id+".unit",
                         desc: sensor.StateId.desc + " Unit",
-                        defaultValue: "UKN/s",
+                        defaultValue: "UKN",
                         parentGroup: sensor.StateId.parentGroup
                       };
                       sensorStateArray.push(unitSensor)
