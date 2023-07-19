@@ -6,6 +6,7 @@ module.exports = {
     NORMALIZE_THROUGHPUT : 'Normalize Throughput (B/s, KB/s, MB/s, GB/s)',
     NORMALIZE_DATA: 'Normalize Data (MB, GB)',
     MAX_WAIT_TIME: 60000,
+    START_CAPTURE_WAIT_TIME: 5000,
     updateUrl: 'https://raw.githubusercontent.com/spdermn02/TouchPortal-HardwareMonitor/main/package.json',
     releaseUrl: 'https://github.com/spdermn02/TouchPortal-HardwareMonitor/releases'
 }

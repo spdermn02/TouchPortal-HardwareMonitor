@@ -149,6 +149,9 @@ Event: This generates the dynamic gauge icon
          - Fixed data processing for small data, and removed extra log
       - Enhancement:
          - Hardware is now sorted by type then name, to keep it consistent between restarts of the plugin.
+1.2.2 - Bug Fixes
+      - Bug:
+          - Upon startup if no hardware data read, we need to enter the read loop, instead of trying to then read sensor data and bombing. changes will loop 60 times, waiting 1 second initially, and then subsequent waits will be incremented by 1 second. After that failure will occur, and error printed into logs.
 
 ```
 ## Build It
