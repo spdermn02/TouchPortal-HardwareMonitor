@@ -20,7 +20,6 @@ const pluginSettings = {
 }
 let firstRun = 1
 let waitTime = 1000
-let MAX_WAIT_TIME
 let sensorCapture = undefined
 
 const buildHardwareList = () => {
@@ -32,7 +31,7 @@ const buildHardwareList = () => {
       class: "Hardware",
     },
     function (err, hardwareData) {
-      if( err ) {
+      if( err || hardwareData === undefined || hardwareData === null ) {
         TPClient.logIt('ERROR','An error has occurred reading hardware data:', err, 'will try again')
         if ( waitTime > Constants.MAX_WAIT_TIME ) {
             TPClient.logIt('ERROR','attempted to read hardware data failed 60 times, check if your Hardware Monitor is running')
@@ -62,7 +61,8 @@ const buildHardwareList = () => {
           }
           
       }
-      startCapture()
+      TPClient.logIt('DEBUG',"Waiting for a few seconds to run startCapture")
+      setTimeout(() => { startCapture() }, Constants.START_CAPTURE_WAIT_TIME)
     }
   );
   return
