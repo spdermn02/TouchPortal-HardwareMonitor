@@ -105,3 +105,10 @@ dist
 
 # Repo Specific
 Installers/
+
+# .NET build artifacts
+[Bb]in/
+[Oo]bj/
+
+# Claude Code local settings
+.claude/settings.local.json
