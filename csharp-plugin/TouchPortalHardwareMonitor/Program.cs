@@ -499,6 +499,9 @@ class Program
         LogDebug($"[Settings] HandleSettings called with {settings.Count} setting groups");
         LogDebug( "Received settings from Touch Portal");
 
+        // Remember the interval so we can re-arm the timer live if it changes
+        var previousInterval = _captureInterval;
+
         foreach (var setting in settings)
         {
             foreach (var kvp in setting)
@@ -538,6 +541,13 @@ class Program
         else
         {
             LogDebug("[Settings] Already capturing, skipping BuildHardwareList");
+
+            // Apply a changed capture interval live, without a plugin restart.
+            if (_captureInterval > 0 && _captureInterval != previousInterval && _captureTimer != null)
+            {
+                _captureTimer.Change(0, _captureInterval);
+                Log($"Capture interval changed live: {previousInterval}ms -> {_captureInterval}ms");
+            }
         }
     }
 
