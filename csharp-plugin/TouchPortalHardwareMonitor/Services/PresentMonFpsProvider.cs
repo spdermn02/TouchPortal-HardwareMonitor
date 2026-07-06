@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 namespace TouchPortalHardwareMonitor.Services;
 
@@ -28,6 +29,7 @@ public sealed class PresentMonFpsProvider : IDisposable
     private readonly ConcurrentDictionary<int, Entry> _entries = new();
 
     private Process? _proc;
+    private IntPtr _job = IntPtr.Zero;
     private int _pidCol = -1;
     private int _msCol = -1;
     private int _appCol = -1;
@@ -47,6 +49,11 @@ public sealed class PresentMonFpsProvider : IDisposable
             LastError = $"PresentMon.exe not found at {_exePath}";
             return false;
         }
+
+        // Clean up any copy of our bundled PresentMon left running by a previous
+        // plugin instance (e.g. after a hard kill), so it doesn't hold the ETW
+        // session or a file lock.
+        KillOrphans();
 
         try
         {
@@ -69,6 +76,14 @@ public sealed class PresentMonFpsProvider : IDisposable
             _proc.Exited += (_, _) => Running = false;
 
             _proc.Start();
+
+            // Tie PresentMon to a kill-on-close job object owned by this
+            // process. If the plugin dies for ANY reason - including Touch
+            // Portal hard-killing it on stop/re-import (which bypasses our
+            // graceful shutdown) - the OS closes the job handle and force-kills
+            // PresentMon, so it can't linger and lock its own .exe.
+            AssignToKillOnCloseJob(_proc);
+
             _proc.BeginOutputReadLine();
             _proc.BeginErrorReadLine();
             Running = true;
@@ -173,7 +188,122 @@ public sealed class PresentMonFpsProvider : IDisposable
         try { if (_proc is { HasExited: false }) _proc.Kill(true); } catch { }
         try { _proc?.Dispose(); } catch { }
         _proc = null;
+
+        // Closing the job handle also force-kills anything still in it.
+        if (_job != IntPtr.Zero)
+        {
+            try { CloseHandle(_job); } catch { }
+            _job = IntPtr.Zero;
+        }
     }
 
     public void Dispose() => Stop();
+
+    // Kill any leftover instance of *our* bundled PresentMon.exe (matched by
+    // full path, so a user's own PresentMon elsewhere is left alone).
+    private void KillOrphans()
+    {
+        try
+        {
+            var full = Path.GetFullPath(_exePath);
+            foreach (var p in Process.GetProcessesByName("PresentMon"))
+            {
+                try
+                {
+                    var path = p.MainModule?.FileName;
+                    if (path != null && string.Equals(Path.GetFullPath(path), full, StringComparison.OrdinalIgnoreCase))
+                    {
+                        p.Kill();
+                        p.WaitForExit(2000);
+                    }
+                }
+                catch { /* access denied / already gone */ }
+                finally { p.Dispose(); }
+            }
+        }
+        catch { }
+    }
+
+    private void AssignToKillOnCloseJob(Process proc)
+    {
+        try
+        {
+            _job = CreateJobObject(IntPtr.Zero, null);
+            if (_job == IntPtr.Zero) return;
+
+            var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+            int len = Marshal.SizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>();
+            IntPtr ptr = Marshal.AllocHGlobal(len);
+            try
+            {
+                Marshal.StructureToPtr(info, ptr, false);
+                SetInformationJobObject(_job, JobObjectExtendedLimitInformation, ptr, (uint)len);
+                AssignProcessToJobObject(_job, proc.Handle);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(ptr);
+            }
+        }
+        catch
+        {
+            // Best-effort; graceful shutdown + KillOrphans still cover most cases.
+        }
+    }
+
+    private const int JobObjectExtendedLimitInformation = 9;
+    private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr CreateJobObject(IntPtr lpJobAttributes, string? lpName);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetInformationJobObject(IntPtr hJob, int infoClass, IntPtr lpInfo, uint cbInfoLength);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AssignProcessToJobObject(IntPtr hJob, IntPtr hProcess);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_BASIC_LIMIT_INFORMATION
+    {
+        public long PerProcessUserTimeLimit;
+        public long PerJobUserTimeLimit;
+        public uint LimitFlags;
+        public UIntPtr MinimumWorkingSetSize;
+        public UIntPtr MaximumWorkingSetSize;
+        public uint ActiveProcessLimit;
+        public UIntPtr Affinity;
+        public uint PriorityClass;
+        public uint SchedulingClass;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IO_COUNTERS
+    {
+        public ulong ReadOperationCount;
+        public ulong WriteOperationCount;
+        public ulong OtherOperationCount;
+        public ulong ReadTransferCount;
+        public ulong WriteTransferCount;
+        public ulong OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+    {
+        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+        public IO_COUNTERS IoInfo;
+        public UIntPtr ProcessMemoryLimit;
+        public UIntPtr JobMemoryLimit;
+        public UIntPtr PeakProcessMemoryUsed;
+        public UIntPtr PeakJobMemoryUsed;
+    }
 }
