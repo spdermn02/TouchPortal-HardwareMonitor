@@ -41,6 +41,24 @@ public sealed class FpsService : IDisposable
 
     internal static void Dbg(string message) => DebugLog?.Invoke(message);
 
+    // Processes that present frames but aren't a user-facing "game" - reporting
+    // their FPS is misleading (e.g. dwm.exe is the desktop compositor, which
+    // presents at the refresh rate whenever you're on the desktop).
+    private static readonly HashSet<string> ExcludedApps = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dwm.exe",
+        "dwm"
+    };
+
+    internal static bool IsExcludedApp(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        var n = name;
+        int slash = n.LastIndexOfAny(new[] { '\\', '/' });
+        if (slash >= 0) n = n[(slash + 1)..];
+        return ExcludedApps.Contains(n);
+    }
+
     public static FpsMode ParseMode(string? value)
     {
         return (value ?? "").Trim().ToLowerInvariant() switch

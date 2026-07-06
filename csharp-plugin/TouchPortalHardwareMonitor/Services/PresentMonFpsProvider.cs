@@ -141,6 +141,9 @@ public sealed class PresentMonFpsProvider : IDisposable
         if (!double.TryParse(f[_msCol], NumberStyles.Float, CultureInfo.InvariantCulture, out var ms)) return;
         if (ms <= 0 || double.IsNaN(ms) || double.IsInfinity(ms)) return;
 
+        // Skip the desktop compositor etc. - not a meaningful "game" FPS.
+        if (_appCol >= 0 && f.Length > _appCol && FpsService.IsExcludedApp(f[_appCol])) return;
+
         var entry = _entries.GetOrAdd(pid, _ => new Entry());
         // Smooth frametime so the reported FPS isn't jittery frame-to-frame.
         entry.EmaFrametimeMs = entry.EmaFrametimeMs <= 0 ? ms : (entry.EmaFrametimeMs * 0.8) + (ms * 0.2);
@@ -170,6 +173,7 @@ public sealed class PresentMonFpsProvider : IDisposable
         foreach (var kv in _entries)
         {
             if (now - kv.Value.LastTick > StaleMs || kv.Value.EmaFrametimeMs <= 0) continue;
+            if (FpsService.IsExcludedApp(kv.Value.Name)) continue;
             var fps = 1000.0 / kv.Value.EmaFrametimeMs;
             if (fps > bestFps)
             {

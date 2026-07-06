@@ -85,6 +85,9 @@ public sealed class EtwFpsProvider : IDisposable
         var name = data.EventName;
         if (name == null || name.IndexOf("present", StringComparison.OrdinalIgnoreCase) < 0) return;
 
+        // Skip the desktop compositor etc. - not a meaningful "game" FPS.
+        if (FpsService.IsExcludedApp(data.ProcessName)) return;
+
         _counts.AddOrUpdate(data.ProcessID, 1, (_, c) => c + 1);
         if (!string.IsNullOrEmpty(data.ProcessName))
         {
@@ -124,11 +127,10 @@ public sealed class EtwFpsProvider : IDisposable
         float bestFps = 0;
         foreach (var kv in snapshot)
         {
-            if (kv.Value > bestFps)
-            {
-                bestFps = kv.Value;
-                bestPid = kv.Key;
-            }
+            if (kv.Value <= bestFps) continue;
+            if (FpsService.IsExcludedApp(NameFor(kv.Key))) continue;
+            bestFps = kv.Value;
+            bestPid = kv.Key;
         }
 
         return bestPid != 0 ? new FpsReading(bestFps, NameFor(bestPid), "Built-in") : null;
