@@ -1,6 +1,6 @@
 {
   "sdk": 6,
-  "version": 2200,
+  "version": 2201,
   "name": "Touch Portal Hardware Monitor",
   "id": "TP_HM",
   "plugin_start_cmd": "\"%TP_PLUGIN_FOLDER%TouchPortalHardwareMonitor\\TouchPortalHardwareMonitor-Launcher.exe\"",
@@ -36,10 +36,10 @@
       "maxLength":3
     },
     {
-      "name":"FPS Source (Off/RTSS/Built-in/Auto)",
+      "name":"FPS Source (Off/RTSS/PresentMon/Built-in/Auto)",
       "default":"Auto",
       "type":"text",
-      "maxLength":8
+      "maxLength":10
     }
   ],
   "categories": [

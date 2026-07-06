@@ -11,9 +11,12 @@ namespace TouchPortalHardwareMonitor.Services;
 /// sessions do). If it can't start (not elevated, blocked, trimmed away), it
 /// fails gracefully and callers fall back to RTSS.
 ///
-/// NOTE: The present-event filter here is intentionally simple (event name
-/// contains "present"). It has NOT been validated against a broad set of real
-/// games/APIs and may need refinement (present model, Vulkan/GL coverage).
+/// NOTE: This counts DXGI/D3D9 *present calls* (one per PresentStart), which
+/// approximates FPS but is not frame-accurate: uncapped apps present far more
+/// often than they display, so this over-reads when a game is uncapped, and it
+/// does not cover every present model / API the way PresentMon does. Treat it
+/// as an approximate fallback; prefer RTSS or the PresentMon backend for
+/// accurate displayed FPS.
 /// </summary>
 public sealed class EtwFpsProvider : IDisposable
 {
@@ -38,8 +41,10 @@ public sealed class EtwFpsProvider : IDisposable
             // A pre-existing session with this name (e.g. after a crash) blocks
             // us; recreating with the same name stops the stale one.
             _session = new TraceEventSession(SessionName) { StopOnDispose = true };
-            _session.EnableProvider("Microsoft-Windows-DXGI");
-            _session.EnableProvider("Microsoft-Windows-D3D9");
+            // Informational level (not full Verbose) keeps the volume to present
+            // events rather than every DXGI/D3D9 diagnostic event.
+            _session.EnableProvider("Microsoft-Windows-DXGI", TraceEventLevel.Informational);
+            _session.EnableProvider("Microsoft-Windows-D3D9", TraceEventLevel.Informational);
             _session.Source.Dynamic.All += OnEvent;
 
             _processThread = new Thread(() =>
@@ -69,14 +74,19 @@ public sealed class EtwFpsProvider : IDisposable
     {
         if (data.ProcessID <= 0) return;
 
+        // Count exactly ONE event per present: the *start* of a DXGI/D3D9
+        // present. The previous "name contains 'present'" filter also matched
+        // PresentStop (so ~2x per frame) plus other present-tagged/overlay
+        // events, which inflated and destabilized the rate.
+        if (data.Opcode != TraceEventOpcode.Start) return;
+
         var name = data.EventName;
-        if (name != null && name.IndexOf("present", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (name == null || name.IndexOf("present", StringComparison.OrdinalIgnoreCase) < 0) return;
+
+        _counts.AddOrUpdate(data.ProcessID, 1, (_, c) => c + 1);
+        if (!string.IsNullOrEmpty(data.ProcessName))
         {
-            _counts.AddOrUpdate(data.ProcessID, 1, (_, c) => c + 1);
-            if (!string.IsNullOrEmpty(data.ProcessName))
-            {
-                _names[data.ProcessID] = data.ProcessName;
-            }
+            _names[data.ProcessID] = data.ProcessName;
         }
     }
 

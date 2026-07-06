@@ -112,3 +112,7 @@ Installers/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Bundled third-party tools downloaded at build time (not committed)
+csharp-plugin/tools/
+PresentMon.exe

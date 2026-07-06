@@ -96,7 +96,7 @@ class Program
             var dump = new DiagnosticDump
             {
                 Timestamp = DateTime.Now.ToString("o"),
-                PluginVersion = "2.2.0",
+                PluginVersion = "2.2.1",
                 IsElevated = _isElevated,
                 SensorAccess = DetectSensorAccessStatus(rawSensorData).Message,
                 Settings = new DiagnosticSettings
@@ -443,7 +443,7 @@ class Program
             return;
         }
 
-        Log("Touch Portal Hardware Monitor v2.2.0 starting...");
+        Log("Touch Portal Hardware Monitor v2.2.1 starting...");
 
         // Initialize log level from file (before anything else)
         InitializeLogLevel();
@@ -482,6 +482,10 @@ class Program
             // Initialize FPS reporting (Auto by default; a setting may change it)
             _fpsService = new FpsService();
             _fpsService.Configure(_fpsMode);
+            if (_fpsService.PresentMonError != null)
+            {
+                Log($"FPS: PresentMon backend unavailable ({_fpsService.PresentMonError}).");
+            }
             if (_fpsService.EtwError != null)
             {
                 Log($"FPS: in-process ETW backend unavailable ({_fpsService.EtwError}). RTSS will be used if it is running.");
@@ -565,7 +569,7 @@ class Program
                     case "Normalize Data (MB, GB)":
                         _normalizeData = kvp.Value;
                         break;
-                    case "FPS Source (Off/RTSS/Built-in/Auto)":
+                    case "FPS Source (Off/RTSS/PresentMon/Built-in/Auto)":
                         var newMode = FpsService.ParseMode(kvp.Value);
                         if (newMode != _fpsMode)
                         {
