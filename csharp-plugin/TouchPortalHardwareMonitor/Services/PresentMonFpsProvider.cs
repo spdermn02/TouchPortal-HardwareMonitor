@@ -25,7 +25,8 @@ public sealed class PresentMonFpsProvider : IDisposable
 
     private const long StaleMs = 2000;
 
-    private readonly string _exePath;
+    private readonly string _bundledPath; // shipped in the plugin folder; never executed directly
+    private readonly string _runPath;     // working copy (outside the plugin folder) we actually launch
     private readonly ConcurrentDictionary<int, Entry> _entries = new();
 
     private Process? _proc;
@@ -38,28 +39,39 @@ public sealed class PresentMonFpsProvider : IDisposable
     public string? LastError { get; private set; }
     public bool Running { get; private set; }
 
-    public PresentMonFpsProvider(string exePath) => _exePath = exePath;
+    public PresentMonFpsProvider(string bundledExePath)
+    {
+        _bundledPath = bundledExePath;
+        var workingDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "TouchPortalHardwareMonitor");
+        _runPath = Path.Combine(workingDir, "PresentMon.exe");
+    }
 
     public static string DefaultExePath() => Path.Combine(AppContext.BaseDirectory, "PresentMon.exe");
 
     public bool Start()
     {
-        if (!File.Exists(_exePath))
+        if (!File.Exists(_bundledPath))
         {
-            LastError = $"PresentMon.exe not found at {_exePath}";
+            LastError = $"PresentMon.exe not found at {_bundledPath}";
             return false;
         }
 
-        // Clean up any copy of our bundled PresentMon left running by a previous
-        // plugin instance (e.g. after a hard kill), so it doesn't hold the ETW
-        // session or a file lock.
-        KillOrphans();
+        // Run PresentMon from a working copy OUTSIDE the plugin folder. Touch
+        // Portal overwrites the plugin folder on re-import and fails if the
+        // bundled PresentMon.exe is locked by a running process; keeping the
+        // executing copy elsewhere means the plugin-folder file is never locked.
+        if (!PrepareWorkingCopy())
+        {
+            return false;
+        }
 
         try
         {
             var psi = new ProcessStartInfo
             {
-                FileName = _exePath,
+                FileName = _runPath,
                 // Stream CSV to stdout, capture all processes, suppress the
                 // interactive console output, and reclaim any stale session.
                 Arguments = "-output_stdout -stop_existing_session -no_top",
@@ -67,7 +79,7 @@ public sealed class PresentMonFpsProvider : IDisposable
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = Path.GetDirectoryName(_exePath) ?? AppContext.BaseDirectory
+                WorkingDirectory = Path.GetDirectoryName(_runPath) ?? AppContext.BaseDirectory
             };
 
             _proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
@@ -199,13 +211,45 @@ public sealed class PresentMonFpsProvider : IDisposable
 
     public void Dispose() => Stop();
 
-    // Kill any leftover instance of *our* bundled PresentMon.exe (matched by
-    // full path, so a user's own PresentMon elsewhere is left alone).
+    // Refresh the working copy we launch from, killing any leftover copy first.
+    private bool PrepareWorkingCopy()
+    {
+        KillOrphans();
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_runPath)!);
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                try
+                {
+                    File.Copy(_bundledPath, _runPath, overwrite: true);
+                    return true;
+                }
+                catch (IOException) when (attempt < 4)
+                {
+                    // A dying orphan may still hold the file briefly.
+                    Thread.Sleep(200);
+                }
+            }
+            // If we couldn't refresh it but a usable copy already exists, run that.
+            if (File.Exists(_runPath)) return true;
+            LastError = $"Could not prepare PresentMon working copy at {_runPath}";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+            return false;
+        }
+    }
+
+    // Kill any leftover instance of *our* working-copy PresentMon.exe (matched
+    // by full path, so a user's own PresentMon elsewhere is left alone).
     private void KillOrphans()
     {
         try
         {
-            var full = Path.GetFullPath(_exePath);
+            var full = Path.GetFullPath(_runPath);
             foreach (var p in Process.GetProcessesByName("PresentMon"))
             {
                 try
