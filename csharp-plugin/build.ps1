@@ -8,7 +8,7 @@ $publishDir = "$projectDir\bin\Release\net10.0\win-x64\publish"
 $launcherPublishDir = "$launcherDir\bin\Release\net10.0\win-x64\publish"
 $installersDir = "$PSScriptRoot\Installers"
 $pluginName = "TouchPortalHardwareMonitor"
-$version = "2.1.0"
+$version = "2.2.0"
 
 Write-Host "Building Touch Portal Hardware Monitor C# Plugin v$version..." -ForegroundColor Cyan
 
