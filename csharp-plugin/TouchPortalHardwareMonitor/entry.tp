@@ -1,9 +1,9 @@
 {
   "sdk": 6,
-  "version": 1202,
+  "version": 2001,
   "name": "Touch Portal Hardware Monitor",
   "id": "TP_HM",
-  "plugin_start_cmd": "\"%TP_PLUGIN_FOLDER%touchportal-hardwaremonitor\\touchportal-hardwaremonitor.exe\"",
+  "plugin_start_cmd": "\"%TP_PLUGIN_FOLDER%TouchPortalHardwareMonitor\\TouchPortalHardwareMonitor-Launcher.exe\"",
   "configuration": {
     "colorDark": "#225834",
     "colorLight": "#45b168"
@@ -40,7 +40,7 @@
     {
       "id": "TP_OHM",
       "name": "TP Hardware Monitor Info",
-      "imagepath": "%TP_PLUGIN_FOLDER%touchportal-hardwaremonitor\\touchportal-hardwaremonitor.png",
+      "imagepath": "%TP_PLUGIN_FOLDER%TouchPortalHardwareMonitor\\TouchPortalHardwareMonitor.png",
       "actions": [ ],
       "states": [ ],
       "events": [ ]

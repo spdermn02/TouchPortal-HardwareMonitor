@@ -1,4 +1,4 @@
-const wmi = require("node-wmi")
+const LHMBridge = require("./lhm-bridge")
 const TouchPortalApi = require("touchportal-api")
 const { open } = require("out-url")
 const Constants = require('./consts')
@@ -21,51 +21,85 @@ const pluginSettings = {
 let firstRun = 1
 let waitTime = 1000
 let sensorCapture = undefined
+let bridge = null
 
-const buildHardwareList = () => {
-  const hardwareTypes = {}
-  TPClient.logIt("DEBUG","Attempting to select for data source",pluginSettings[Constants.SENSOR_DATA_SOURCE],"class Hardware" )
-  wmi.Query(
-    {
-      namespace: pluginSettings[Constants.SENSOR_DATA_SOURCE],
-      class: "Hardware",
+const initBridge = async () => {
+  bridge = new LHMBridge({
+    onError: (err) => {
+      TPClient.logIt('ERROR', 'LHMBridge error:', err.message)
     },
-    function (err, hardwareData) {
-      if( err || hardwareData === undefined || hardwareData === null ) {
-        TPClient.logIt('ERROR','An error has occurred reading hardware data:', err, 'will try again')
-        if ( waitTime > Constants.MAX_WAIT_TIME ) {
-            TPClient.logIt('ERROR','attempted to read hardware data failed 60 times, check if your Hardware Monitor is running')
-            return
-        }
-        setTimeout(() => { buildHardwareList() }, waitTime);
-        waitTime = waitTime + 1000
+    onReady: () => {
+      TPClient.logIt('DEBUG', 'LHMBridge is ready')
+    },
+    onExit: (code, signal) => {
+      TPClient.logIt('DEBUG', 'LHMBridge exited with code:', code, 'signal:', signal)
+    }
+  })
+
+  try {
+    await bridge.start()
+    TPClient.logIt('DEBUG', 'LHMBridge started successfully')
+  } catch (err) {
+    TPClient.logIt('ERROR', 'Failed to start LHMBridge:', err.message)
+    throw err
+  }
+}
+
+const buildHardwareList = async () => {
+  const hardwareTypes = {}
+  TPClient.logIt("DEBUG", "Attempting to get hardware list from LHMBridge")
+
+  try {
+    const hardwareData = await bridge.getHardware()
+
+    if (!hardwareData || !Array.isArray(hardwareData)) {
+      TPClient.logIt('ERROR', 'Invalid hardware data received, will try again')
+      if (waitTime > Constants.MAX_WAIT_TIME) {
+        TPClient.logIt('ERROR', 'attempted to read hardware data failed 60 times, check if LibreHardwareMonitor bridge is running')
         return
       }
-      if( typeof hardwareData === 'object' ) {
-          hardwareData.sort((a,b) => {
-            return a.HardwareType.toUpperCase() < b.HardwareType.toUpperCase() ? -1 : a.HardwareType.toUpperCase() > b.HardwareType.toUpperCase() ? 1 : a.Name.toUpperCase() < b.Name.toUpperCase() ? -1 : a.Name.toUpperCase() > b.Name.toUpperCase() ? 1 : 0
-          })
-          for( let i = 0; i < hardwareData.length; i++ ){
-              const key = hardwareData[i].Identifier
-              if( hardware[key] === undefined ) {
-                hardware[key] = hardwareData[i]
-                hardware[key].HardwareType = hardware[key].HardwareType.toLowerCase().replace(/gpu.*/,'GPU').toUpperCase()
-                hardware[key].Index = parseInt(hardware[key].Identifier.toLowerCase().replace(/.*\/([0-9]+)/,'$1'),10)
-                hardwareTypes[hardware[key].HardwareType] = hardwareTypes[hardware[key].HardwareType] != undefined ? hardwareTypes[hardware[key].HardwareType] + 1 : 1;
-                if( hardware[key].Index == null || isNaN(hardware[key].Index) ) {
-                  hardware[key].Index = hardwareTypes[hardware[key].HardwareType]
-                }
-                
-                hardware[key].Sensors = {}
-              }
-          }
-          
-      }
-      TPClient.logIt('DEBUG',"Waiting for a few seconds to run startCapture")
-      setTimeout(() => { startCapture() }, Constants.START_CAPTURE_WAIT_TIME)
+      setTimeout(() => { buildHardwareList() }, waitTime)
+      waitTime = waitTime + 1000
+      return
     }
-  );
-  return
+
+    hardwareData.sort((a, b) => {
+      return a.HardwareType.toUpperCase() < b.HardwareType.toUpperCase() ? -1 :
+        a.HardwareType.toUpperCase() > b.HardwareType.toUpperCase() ? 1 :
+        a.Name.toUpperCase() < b.Name.toUpperCase() ? -1 :
+        a.Name.toUpperCase() > b.Name.toUpperCase() ? 1 : 0
+    })
+
+    TPClient.logIt('DEBUG', JSON.stringify(hardwareData, null, 2))
+
+    for (let i = 0; i < hardwareData.length; i++) {
+      const key = hardwareData[i].Identifier
+      if (hardware[key] === undefined) {
+        hardware[key] = hardwareData[i]
+        hardware[key].HardwareType = hardware[key].HardwareType.toLowerCase().replace(/gpu.*/, 'GPU').toUpperCase()
+        hardware[key].Index = parseInt(hardware[key].Identifier.toLowerCase().replace(/.*\/([0-9]+)/, '$1'), 10)
+        hardwareTypes[hardware[key].HardwareType] = hardwareTypes[hardware[key].HardwareType] != undefined ? hardwareTypes[hardware[key].HardwareType] + 1 : 1
+        if (hardware[key].Index == null || isNaN(hardware[key].Index)) {
+          hardware[key].Index = hardwareTypes[hardware[key].HardwareType]
+        }
+
+        hardware[key].Sensors = {}
+      }
+    }
+
+    TPClient.logIt('DEBUG', "Waiting for a few seconds to run startCapture")
+    
+    setTimeout(() => { startCapture() }, Constants.START_CAPTURE_WAIT_TIME)
+
+  } catch (err) {
+    TPClient.logIt('ERROR', 'An error has occurred reading hardware data:', err.message, 'will try again')
+    if (waitTime > Constants.MAX_WAIT_TIME) {
+      TPClient.logIt('ERROR', 'attempted to read hardware data failed 60 times, check if LibreHardwareMonitor bridge is running')
+      return
+    }
+    setTimeout(() => { buildHardwareList() }, waitTime)
+    waitTime = waitTime + 1000
+  }
 }
 
 const buildSensorStateId = (hardwareKey, sensorInfo) => {
@@ -86,7 +120,7 @@ const buildSensorStateId = (hardwareKey, sensorInfo) => {
 }
 
 const runSensorConversions = (sensor) => {
-  if( sensor.SensorType === 'Temperature' && pluginSettings[Constants.TEMP_READOUT_SETTING] === 'F') {
+  if( sensor.SensorType === 'Temperatures' && pluginSettings[Constants.TEMP_READOUT_SETTING] === 'F') {
     sensor.Value = (sensor.Value * 9.0 / 5.0 ) + 32.0
   }
   else if( sensor.SensorType === 'Throughput' && pluginSettings[Constants.NORMALIZE_THROUGHPUT].toLowerCase() === 'yes') {
@@ -130,75 +164,76 @@ const startCapture = () => {
   if( sensorCapture ) {
     clearInterval(sensorCapture)
   }
-  sensorCapture = setInterval( () => { 
+  sensorCapture = setInterval(async () => {
     let sensorStateArray = [];
     let stateUpdateArray = [];
-    wmi.Query(
-      {
-        namespace: pluginSettings[Constants.SENSOR_DATA_SOURCE],
-        class: "Sensor",
-      },
-      function (err, sensorData) {
-        if( err ) {
-          TPClient.logIt('ERROR','An error has occurred reading sensor data:', err)
-          return
+
+    try {
+      const sensorData = await bridge.getSensors()
+      TPClient.logIt('DEBUG', JSON.stringify(sensorData))
+
+      if (!sensorData || !Array.isArray(sensorData)) {
+        TPClient.logIt('ERROR', 'Invalid sensor data received')
+        return
+      }
+
+      for (const sensor of sensorData) {
+        const hardwareKey = sensor.Parent
+        const stateId = buildSensorStateId(hardwareKey, sensor)
+        sensor.StateId = stateId
+        // Apparently some sensors use the same Identifier, so throwing Name on them
+        // To force uniqueness
+        sensor.Identifier = sensor.Identifier + "/" + sensor.Name.toLowerCase().replace(/ /g, '.')
+
+        runSensorConversions(sensor)
+
+        sensor.Value = sensor.Value % 1 !== 0 ? parseFloat(sensor.Value).toFixed(1) : sensor.Value
+
+        if (hardware[hardwareKey] && hardware[hardwareKey].Sensors[sensor.Identifier] == undefined) {
+          sensor.StateId.defaultValue = sensor.Value;
+          hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
+          //createStateArray
+          sensorStateArray.push(sensor.StateId)
+
+          //updateStateArray - even though we send defaultValue, we need this so any Events are fired
+          stateUpdateArray.push({ 'id': sensor.StateId.id, 'value': sensor.Value })
+          if (sensor.Unit !== undefined) {
+            let unitSensor = {
+              id: sensor.StateId.id + ".unit",
+              desc: sensor.StateId.desc + " Unit",
+              defaultValue: "UKN",
+              parentGroup: sensor.StateId.parentGroup
+            };
+            sensorStateArray.push(unitSensor)
+            stateUpdateArray.push({ 'id': sensor.StateId.id + ".unit", 'value': sensor.Unit })
+          }
         }
-        if( typeof sensorData === 'object' ) {
-            for(const sensor of sensorData){
-                const hardwareKey = sensor.Parent
-                const stateId = buildSensorStateId(hardwareKey, sensor)
-                sensor.StateId = stateId
-                // Apparently some sensors use the same Identifier, so throwing Name on them
-                // To force uniqueness
-                sensor.Identifier = sensor.Identifier + "/" + sensor.Name.toLowerCase().replace(/ /g,'.')
-                
-                runSensorConversions(sensor)
-
-                sensor.Value = sensor.Value % 1 !== 0 ? parseFloat(sensor.Value).toFixed(1) : sensor.Value
-
-                if( hardware[hardwareKey].Sensors[sensor.Identifier] == undefined ) {
-                    sensor.StateId.defaultValue  = sensor.Value;
-                    hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
-                    //createStateArray
-                    sensorStateArray.push(sensor.StateId)
-
-                    //updateStateArray - even though we send defaultValue, we need this so any Events are fired
-                    stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
-                    if( sensor.Unit !== undefined ) {
-                      let unitSensor = {
-                        id: sensor.StateId.id+".unit",
-                        desc: sensor.StateId.desc + " Unit",
-                        defaultValue: "UKN",
-                        parentGroup: sensor.StateId.parentGroup
-                      };
-                      sensorStateArray.push(unitSensor)
-                      stateUpdateArray.push({'id': sensor.StateId.id+".unit", 'value': sensor.Unit})
-                    }
-                }
-                else{
-                    if( hardware[hardwareKey].Sensors[sensor.Identifier].Value !== sensor.Value ){
-                        hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
-                        //addToStateUpdateArray
-                        stateUpdateArray.push({'id': sensor.StateId.id, 'value': sensor.Value})
-                        if( sensor.Unit !== undefined ) {
-                          stateUpdateArray.push({'id': sensor.StateId.id+".unit", 'value': sensor.Unit})
-                        }
-                    }
-                }
+        else if (hardware[hardwareKey]) {
+          if (hardware[hardwareKey].Sensors[sensor.Identifier].Value !== sensor.Value) {
+            hardware[hardwareKey].Sensors[sensor.Identifier] = sensor
+            //addToStateUpdateArray
+            stateUpdateArray.push({ 'id': sensor.StateId.id, 'value': sensor.Value })
+            if (sensor.Unit !== undefined) {
+              stateUpdateArray.push({ 'id': sensor.StateId.id + ".unit", 'value': sensor.Unit })
             }
-
-            if( sensorStateArray.length > 0 ) {
-              TPClient.createStateMany(sensorStateArray)
-            }
-            if( stateUpdateArray.length > 0 ) {
-              TPClient.stateUpdateMany(stateUpdateArray)
-            }
+          }
         }
       }
-    )},prevCaptureInterval)
+
+      if (sensorStateArray.length > 0) {
+        TPClient.createStateMany(sensorStateArray)
+      }
+      if (stateUpdateArray.length > 0) {
+        TPClient.stateUpdateMany(stateUpdateArray)
+      }
+
+    } catch (err) {
+      TPClient.logIt('ERROR', 'An error has occurred reading sensor data:', err.message)
+    }
+  }, prevCaptureInterval)
 }
 
-TPClient.on("Settings", (data) => {
+TPClient.on("Settings", async (data) => {
   TPClient.logIt("DEBUG","Settings: New Settings from Touch-Portal")
   data.forEach( (setting) => {
     let key = Object.keys(setting)[0]
@@ -208,6 +243,17 @@ TPClient.on("Settings", (data) => {
   if( prevCaptureInterval != pluginSettings[Constants.CAPTURE_INTERVAL_SETTING] ) {
     prevCaptureInterval = pluginSettings[Constants.CAPTURE_INTERVAL_SETTING]
   }
+
+  // Initialize bridge if not already done
+  if (!bridge) {
+    try {
+      await initBridge()
+    } catch (err) {
+      TPClient.logIt('ERROR', 'Failed to initialize LHMBridge:', err.message)
+      return
+    }
+  }
+
   buildHardwareList()
 })
 
@@ -228,5 +274,20 @@ TPClient.on("NotificationClicked", (data) => {
     open(Constants.releaseUrl);
   }
 });
+
+// Handle graceful shutdown
+const shutdown = async () => {
+  TPClient.logIt('DEBUG', 'Shutting down plugin...')
+  if (sensorCapture) {
+    clearInterval(sensorCapture)
+  }
+  if (bridge) {
+    await bridge.stop()
+  }
+  process.exit(0)
+}
+
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
 
 TPClient.connect({ pluginId, updateUrl:Constants.updateUrl });
