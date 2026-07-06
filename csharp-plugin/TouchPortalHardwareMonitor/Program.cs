@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net.NetworkInformation;
+using System.Security.Principal;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using TouchPortalHardwareMonitor.Models;
@@ -22,6 +23,10 @@ class Program
 
     // Log level - read from loglevel.txt at startup
     private static bool _debugLogging = false;
+
+    // Whether the process is running elevated (administrator). The
+    // LibreHardwareMonitor kernel driver (WinRing0) only loads when elevated.
+    private static bool _isElevated = false;
 
     // Persistent hardware identifier to index mapping
     private static Dictionary<string, HardwareMapping> _hardwareMapping = new();
@@ -91,7 +96,9 @@ class Program
             var dump = new DiagnosticDump
             {
                 Timestamp = DateTime.Now.ToString("o"),
-                PluginVersion = "2.0.1",
+                PluginVersion = "2.0.2",
+                IsElevated = _isElevated,
+                SensorAccess = DetectSensorAccessStatus(rawSensorData).Message,
                 Settings = new DiagnosticSettings
                 {
                     CaptureInterval = _captureInterval,
@@ -155,6 +162,7 @@ class Program
                     Name = sensor.Name,
                     SensorType = sensor.SensorType,
                     RawValue = sensor.Value,
+                    ValuePresent = sensor.ValuePresent,
                     Min = sensor.Min,
                     Max = sensor.Max,
                     Matched = matched
@@ -264,6 +272,58 @@ class Program
         { "Humidity", "%" }
     };
 
+    private static bool IsProcessElevated()
+    {
+        try
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                return false;
+            }
+            using var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    // Infers whether the LibreHardwareMonitor kernel driver loaded by checking
+    // for readable CPU temperature. CPU temp/clock/voltage and motherboard
+    // sensors come from MSR/SuperIO reads that require the driver; GPU (NVAPI),
+    // storage (SMART) and OS load/memory do not. A CPU with no readable
+    // temperature is the reliable signal that the driver did not load.
+    private static (bool Healthy, string Message) DetectSensorAccessStatus(List<SensorItem> sensors)
+    {
+        bool cpuPresent = _hardware.Values.Any(h => h.HardwareType == "CPU")
+            || _hardwareMapping.Values.Any(m => m.HardwareType.Equals("CPU", StringComparison.OrdinalIgnoreCase));
+
+        if (!cpuPresent)
+        {
+            return (true, "OK (no CPU detected to verify)");
+        }
+
+        bool cpuHasTemperature = sensors.Any(s =>
+            s.SensorType == "Temperature"
+            && s.ValuePresent
+            && s.Parent.Contains("cpu", StringComparison.OrdinalIgnoreCase));
+
+        if (cpuHasTemperature)
+        {
+            return (true, "OK - CPU sensors accessible");
+        }
+
+        var message = _isElevated
+            ? "CPU temperature/clock/voltage and motherboard sensors are unavailable even though the plugin is running as administrator. "
+              + "The LibreHardwareMonitor kernel driver (WinRing0) was blocked from loading - most likely Windows Core Isolation > Memory Integrity is ON, "
+              + "or antivirus / another monitoring app (HWiNFO, MSI Afterburner, Armoury Crate, OpenRGB, Ryzen Master) is holding the driver."
+            : "CPU temperature/clock/voltage and motherboard sensors are unavailable because the plugin is NOT running as administrator, "
+              + "so the LibreHardwareMonitor kernel driver could not load. Accept the UAC prompt when the plugin starts, or run Touch Portal as administrator.";
+        return (false, message);
+    }
+
     private static void LoadHardwareMapping()
     {
         try
@@ -353,10 +413,18 @@ class Program
 
     static async Task Main(string[] args)
     {
-        Log("Touch Portal Hardware Monitor v2.0.1 starting...");
+        Log("Touch Portal Hardware Monitor v2.0.2 starting...");
 
         // Initialize log level from file (before anything else)
         InitializeLogLevel();
+
+        // Record elevation - CPU/motherboard sensors depend on it
+        _isElevated = IsProcessElevated();
+        Log($"Running as administrator (elevated): {_isElevated}");
+        if (!_isElevated)
+        {
+            Log("WARNING: Not elevated. CPU temperature/clock/voltage and motherboard sensors will be unavailable because the LibreHardwareMonitor kernel driver cannot load.");
+        }
 
         // Check if a sensor dump was requested
         CheckDumpTrigger();
@@ -592,7 +660,11 @@ class Program
             // Write diagnostic dump if requested
             if (_dumpRequested)
             {
-                WriteDiagnosticDump(hardwareData, sensorData!, hardwareWithSensors, activeNetworkAdapters);
+                // Use the diagnostic collection so sensors LHM couldn't read
+                // (null values, e.g. CPU temp when the driver didn't load) show
+                // up in the dump instead of silently disappearing.
+                var diagnosticSensors = _hwService?.GetSensorsForDiagnostics() ?? sensorData!;
+                WriteDiagnosticDump(hardwareData, diagnosticSensors, hardwareWithSensors, activeNetworkAdapters);
                 _dumpRequested = false;
             }
 
@@ -729,8 +801,34 @@ class Program
             var isFirstCapture = _firstCapture;
             _firstCapture = false;
 
+            // On first capture, check whether MSR/SuperIO sensors are accessible
+            // (i.e. whether the kernel driver loaded) and warn if not.
+            (bool Healthy, string Message) sensorAccess = (true, "OK");
+            if (isFirstCapture)
+            {
+                sensorAccess = DetectSensorAccessStatus(sensorData);
+                if (!sensorAccess.Healthy)
+                {
+                    Log($"[SensorAccess] {sensorAccess.Message}");
+                    _tpClient?.LogIt("WARN", sensorAccess.Message);
+                }
+            }
+
             var newStates = new List<TPStateDefinition>();
             var stateUpdates = new List<TPStateValue>();
+
+            // Publish a plugin status state users can display on a button so they
+            // can self-diagnose missing CPU/motherboard sensors without a dump.
+            if (isFirstCapture)
+            {
+                newStates.Add(new TPStateDefinition
+                {
+                    Id = "tp-hm.state.plugin.sensor_status",
+                    Desc = "TP Hardware Monitor > Plugin > Sensor Access Status",
+                    DefaultValue = sensorAccess.Message,
+                    ParentGroup = "TP Hardware Monitor"
+                });
+            }
 
             foreach (var sensor in sensorData)
             {
