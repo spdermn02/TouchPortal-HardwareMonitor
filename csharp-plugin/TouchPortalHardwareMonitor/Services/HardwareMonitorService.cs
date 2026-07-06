@@ -50,14 +50,22 @@ public class HardwareMonitorService : IDisposable
         }
     }
 
-    public List<SensorItem> GetSensors()
+    public List<SensorItem> GetSensors() => CollectAll(includeValueless: false);
+
+    // Diagnostic variant: also includes sensors LHM created but couldn't read
+    // (Value == null). A CPU/motherboard whose sensors all come back null is the
+    // tell-tale of a kernel driver (WinRing0/Ring0) that failed to load - the
+    // live path filters these out, so the dump needs them to diagnose the cause.
+    public List<SensorItem> GetSensorsForDiagnostics() => CollectAll(includeValueless: true);
+
+    private List<SensorItem> CollectAll(bool includeValueless)
     {
         var result = new List<SensorItem>();
-        CollectSensors(_computer.Hardware, result);
+        CollectSensors(_computer.Hardware, result, includeValueless);
         return result;
     }
 
-    private void CollectSensors(IEnumerable<IHardware> hardwareList, List<SensorItem> result)
+    private void CollectSensors(IEnumerable<IHardware> hardwareList, List<SensorItem> result, bool includeValueless)
     {
         foreach (var hardware in hardwareList)
         {
@@ -65,24 +73,28 @@ public class HardwareMonitorService : IDisposable
 
             foreach (var sensor in hardware.Sensors)
             {
-                if (sensor.Value.HasValue)
+                var hasValue = sensor.Value.HasValue;
+                if (!hasValue && !includeValueless)
                 {
-                    result.Add(new SensorItem
-                    {
-                        Parent = hardware.Identifier.ToString(),
-                        Identifier = sensor.Identifier.ToString(),
-                        Name = sensor.Name,
-                        SensorType = sensor.SensorType.ToString(),
-                        Value = sensor.Value.Value,
-                        Min = sensor.Min,
-                        Max = sensor.Max
-                    });
+                    continue;
                 }
+
+                result.Add(new SensorItem
+                {
+                    Parent = hardware.Identifier.ToString(),
+                    Identifier = sensor.Identifier.ToString(),
+                    Name = sensor.Name,
+                    SensorType = sensor.SensorType.ToString(),
+                    Value = hasValue ? sensor.Value!.Value : float.NaN,
+                    ValuePresent = hasValue,
+                    Min = sensor.Min,
+                    Max = sensor.Max
+                });
             }
 
             if (hardware.SubHardware.Length > 0)
             {
-                CollectSensors(hardware.SubHardware, result);
+                CollectSensors(hardware.SubHardware, result, includeValueless);
             }
         }
     }

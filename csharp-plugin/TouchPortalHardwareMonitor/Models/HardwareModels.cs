@@ -34,6 +34,9 @@ public class SensorItem
     public string Name { get; set; } = string.Empty;
     public string SensorType { get; set; } = string.Empty;
     public float Value { get; set; }
+    // False when LibreHardwareMonitor reported the sensor but had no readable
+    // value (Value == null); Value is then NaN. Used only by the diagnostic dump.
+    public bool ValuePresent { get; set; } = true;
     public float? Min { get; set; }
     public float? Max { get; set; }
     public string? Unit { get; set; }
@@ -56,6 +59,17 @@ public class DiagnosticDump
 
     [JsonPropertyName("pluginVersion")]
     public string PluginVersion { get; set; } = string.Empty;
+
+    // Whether the plugin process is running elevated. The LibreHardwareMonitor
+    // kernel driver (WinRing0) only loads when elevated, so this is the first
+    // thing to check when CPU/motherboard sensors are missing.
+    [JsonPropertyName("isElevated")]
+    public bool IsElevated { get; set; }
+
+    // Human-readable summary of whether MSR/SuperIO sensors are accessible
+    // (i.e. whether the kernel driver appears to have loaded).
+    [JsonPropertyName("sensorAccess")]
+    public string SensorAccess { get; set; } = string.Empty;
 
     [JsonPropertyName("settings")]
     public DiagnosticSettings Settings { get; set; } = new();
@@ -137,6 +151,11 @@ public class DiagnosticSensor
 
     [JsonPropertyName("rawValue")]
     public float RawValue { get; set; }
+
+    // False when LHM reported this sensor but couldn't read a value (RawValue
+    // is NaN). Many null CPU/motherboard sensors => kernel driver didn't load.
+    [JsonPropertyName("valuePresent")]
+    public bool ValuePresent { get; set; } = true;
 
     [JsonPropertyName("convertedValue")]
     public float? ConvertedValue { get; set; }
