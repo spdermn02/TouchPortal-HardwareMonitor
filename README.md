@@ -1,178 +1,219 @@
-# TouchPortal HardwareMonitor
+# Touch Portal Hardware Monitor
 
-Read Data from Open Hardware Monitor or Libre Hardware Monitor, get all data from the sensors as auto created state values.
+[![Latest release](https://img.shields.io/github/v/release/spdermn02/TouchPortal-HardwareMonitor?include_prereleases&sort=semver)](https://github.com/spdermn02/TouchPortal-HardwareMonitor/releases)
+[![Downloads](https://img.shields.io/github/downloads/spdermn02/TouchPortal-HardwareMonitor/total)](https://github.com/spdermn02/TouchPortal-HardwareMonitor/releases)
+[![License: MIT](https://img.shields.io/github/license/spdermn02/TouchPortal-HardwareMonitor)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-blue)
 
-- [TouchPortal HardwareMonitor](#touchportal-hardwaremonitor)
-  - [Current Sensors and Values Available](#current-sensors-and-values-available)
-  - [Getting Started](#getting-started)
-  - [Installing](#installing)
-    - [Step 1: Prerequisites](#step-1-prerequisites)
-    - [Step 2: Download Plugin](#step-2-download-plugin)
-    - [Step 3: Import into Touch Portal](#step-3-import-into-touch-portal)
-    - [Step 4: Locate .tpp and Open](#step-4-locate-tpp-and-open)
-    - [Step 5: Select `Trust Always` on Warning Popup](#step-5-select-trust-always-on-warning-popup)
-    - [Step 6: Click `OK` on Popup](#step-6-click-ok-on-popup)
-    - [Step 7: Enjoy the Plugin](#step-7-enjoy-the-plugin)
-  - [Settings](#settings)
-  - [Examples](#examples)
-    - [Display Memory Usage](#display-memory-usage)
-    - [Display CPU Usage and Temperature](#display-cpu-usage-and-temperature)
-  - [ChangeLog](#changelog)
-  - [Build It](#build-it)
-  - [Versioning](#versioning)
-  - [Authors](#authors)
-  - [License](#license)
-  - [Acknowledgments](#acknowledgments)
+Turn your PC's live hardware sensors — **CPU, GPU, RAM, storage, network, motherboard** — plus **display refresh rate** and **game FPS** into auto-created Touch Portal states you can drop onto any button or page.
 
-## Current Sensors and Values Available
+> [!NOTE]
+> **Version 2.x is a complete rewrite in C# / .NET 10.** LibreHardwareMonitor is now **built in** — you no longer install or run it (or Open Hardware Monitor) separately. It ships as a single self-contained `.exe`.
+> Looking for the legacy Node.js v1.x docs? See **[README-v1.X.md](README-v1.X.md)**.
 
-With this rewrite, all current sensor data that is available in Open Hardware Monitor or Libre Hardware Monitor is going to be made available dynamically to you as a plugin state.  The state id's themselves are fairly "generic" in regards to hardware they reference it by type of hardware not specifically the exact hardware names. So sharing pages is still possible but note that 1 cpu based computers could only utilize one portion of a page if it was created from a 2 cpu based computer. (if that makes sense)
+---
 
-## Getting Started
-If you use Touch Portal and are interested in having a "dashboard" display of your computer statistics, these instructions will help get that setup for you.
+## ✨ Features
 
-If you don't use Touch Portal - how dare you, you should!
+- 🧩 **Self-contained** — one trimmed, single-file `.exe`. No Node.js, no separate hardware-monitor app, nothing else to install.
+- 🔌 **LibreHardwareMonitor built in** (LibreHardwareMonitorLib 0.9.6) — sensors read directly, in-process, not over WMI.
+- 🛡️ **Runs elevated** — a small launcher requests UAC so MSR/SuperIO sensors (CPU temps, clocks, voltages, motherboard, fans) are actually readable.
+- 📊 **Auto-created states for every sensor**, each with companion states:
+  - `….unit` — always available (°C/°F, %, W, MHz, RPM, GB, …)
+  - `….min` / `….max` — lowest/highest observed value
+- 🖥️ **Display states** — refresh rate (Hz), resolution, name and primary flag per monitor. *No driver, no elevation.*
+- 🎮 **FPS states** — foreground-app frame rate, with a selectable source (**RTSS / in-process ETW / Auto**).
+- ⏱️ **Live settings** — changing the capture interval or FPS source applies immediately, no restart.
+- 🔢 **Stable hardware numbering** — persistent per-device indexes saved to `%AppData%\TouchPortalHardwareMonitor`, so `CPU1`, `GPU1`, `Network1`, … keep pointing at the same device across restarts and reinstalls.
+- 🧹 **Cleaner device list** — Windows network filter drivers and virtual/inactive adapters are filtered out; only hardware that reports sensors is published.
+- 🩺 **Built-in diagnostics** — a sensor-access status state, elevation/driver detection, and a full JSON hardware dump for troubleshooting.
 
-## Installing
+---
 
-### Step 1: Prerequisites
+## 📊 What you get (states)
 
-Install Open Hardware Monitor **OR** Libre Hardware Monitor if you do not have either, and make sure it is running
+**Sensor states** are created dynamically for every reported sensor:
 
-1) **Open Hardware Monitor** <br>
-The original plugin was built to read from this program's data, so left it here for users who don't want to migrate to using Libre Hardware Monitor
-https://openhardwaremonitor.org/ 
+```
+tp-hm.state.{TYPE}{index}.{SensorType}.{name}          e.g. tp-hm.state.CPU1.Temperature.cpu.package
+tp-hm.state.{TYPE}{index}.{SensorType}.{name}.unit     e.g. tp-hm.state.CPU1.Temperature.cpu.package.unit  → "C"
+tp-hm.state.{TYPE}{index}.{SensorType}.{name}.min / .max
+```
 
-1) **Libre Hardware Monitor**<br>
-Now you can read the sensor data from Libre Hardware Monitor (a fork of Open Hardware Monitor, but seems to have better support and more updates) https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
+`TYPE` is `CPU`, `GPU`, `MEMORY`, `STORAGE`, `NETWORK`, `MOTHERBOARD`, … and `index` is the persistent per-type number.
 
-### Step 2: Download Plugin
-Download the Touch Portal plugin from the [Releases](https://github.com/spdermn02/TouchPortal-HardwareMonitor/releases) section of this repository
+**Display states** (group **Displays**):
 
-### Step 3: Import into Touch Portal
-Select the Gear icon at the top of Touch Portal desktop window and select `Import plug-in...` <br><br>
+| State | Example |
+|---|---|
+| `tp-hm.state.display.{n}.refresh_rate` (+ `.refresh_rate.unit`) | `144` / `Hz` |
+| `tp-hm.state.display.{n}.resolution` | `2560x1440` |
+| `tp-hm.state.display.{n}.name` | monitor name |
+| `tp-hm.state.display.{n}.primary` | `true` / `false` |
+| `tp-hm.state.display.count` | `2` |
+
+**FPS states** (group **FPS**):
+
+| State | Example |
+|---|---|
+| `tp-hm.state.fps.value` (+ `.unit`) | `144` / `FPS` |
+| `tp-hm.state.fps.process` | `game.exe` |
+| `tp-hm.state.fps.source` | `RTSS` / `Built-in` |
+
+**Diagnostics state** (group **TP Hardware Monitor**):
+
+| State | Purpose |
+|---|---|
+| `tp-hm.state.plugin.sensor_status` | Plain-language sensor-access status (e.g. warns if the kernel driver didn't load) |
+
+---
+
+## 📋 Requirements
+
+- Windows 10 / 11 (x64)
+- **Administrator rights** (the plugin elevates via UAC on launch)
+- Touch Portal with SDK 6
+- *(Optional)* RivaTuner Statistics Server / MSI Afterburner — for the `RTSS` FPS source
+
+---
+
+## 📥 Installation
+
+### Step 1 — Download
+Grab the latest `TouchPortalHardwareMonitor-Windows-<version>.tpp` from the [**Releases**](https://github.com/spdermn02/TouchPortal-HardwareMonitor/releases) page.
+
+> [!IMPORTANT]
+> Upgrading from **v1.x**? Remove the old plugin first and **back up / export your pages** — hardware indexes may map to different devices in 2.x, so some buttons will need re-pointing. See [Breaking changes](#-upgrading-from-v1x).
+
+### Step 2 — Import into Touch Portal
+Click the gear icon in the Touch Portal desktop app and choose **Import plug-in…**
+
 ![Import Plugin](resources/tp-plugin-import.png)
 
-### Step 4: Locate .tpp and Open
- Navigate to where you downloaded the .tpp file from Step 1, select it and click "Open"
+### Step 3 — Locate the `.tpp` and open it
+Navigate to the downloaded `.tpp`, select it, and click **Open**.
 
-### Step 5: Select `Trust Always` on Warning Popup
-In order for this plugin to run when you start Touch Portal, you will need to select `Trust Always` on the popup that appears, if you do not do this, it will show up every time you start Touch Portal <br><br>
-![Click Trust Always](resources/tp-plugin-trust.png)
+### Step 4 — Trust the plugin
+Select **Trust Always** so the plugin starts automatically with Touch Portal.
 
-### Step 6: Click `OK` on Popup
-Once you trust the plugin, click `OK` button <br><br>
-![](resources/tp-plugin-success.png)
+![Trust Always](resources/tp-plugin-trust.png)
 
-### Step 7: Enjoy the Plugin
-After the plugin imports, it will start and start reading the data by default using `root/LibreHardwareMonitor` every 2 seconds and report temperature in Celsius. See the Settings section for info on how to change these.
+### Step 5 — Confirm
+Click **OK**.
 
-## Settings
+![Success](resources/tp-plugin-success.png)
 
-There are currently 3 settings for this plugin
-1) `Hardware Monitor To Use` - Which Sensor data to read
-   1) Default: `root/LibreHardwareMonitor`
-   2) Valid Values: `root/LibreHardwareMonitor` or `root/OpenHardwareMonitor`
-2) `Sensor Capture Time (ms)` - How often to read sensor data
-   1) Default: `2000`
-   2) Min: 1000
-   3) Max: 9999
-3) `Temperature Unit (C/F)` - Which Temperature Scale to use
-   1) Default: C
-   2) Valid Values: `C` or `F`
-4) `Normalize Throughput (B/s, KB/s, MB/s, GB/s)` - Normalize Throughput values to smaller more Visually pleasing values
-   1) Default: No
-   2) Valid Values: `No` or `Yes`
-   3) How: This takes the throughput values and divides by 1024, until the value is less than 1024, counts how many times it does the calc to know Unit, will now create a unit based state as well for those that are converted 
-5) `Normalize Data (MB, GB)` - Normalize SmallData values to smaller more Visually pleasing values
-   1) Default: No
-   2) Valid Values: `No` or `Yes`
-   3) How: This takes the SmallData values and divides by 1024, until the value is less than 1024, counts how many times it does the calc to know Unit, will now create a unit based state as well for those that are converted 
+### Step 6 — Accept the UAC prompt
+The plugin launches elevated so it can read all sensors. Accept the Windows UAC prompt when it appears. That's it — states start populating within a couple of seconds.
 
-## Examples
+---
 
-Again - the plugin-state names may be different depending on your hardware configuration from what mine are so this is purely for example of how to use it possibly
+## ⚙️ Settings
 
-### Display Memory Usage
+| Setting | Default | Values | Notes |
+|---|---|---|---|
+| Sensor Capture Time (ms) | `2000` | `500`–`99999` | How often sensors are read. **Applies live.** |
+| Temperature Unit (C/F) | `C` | `C` / `F` | |
+| Normalize Throughput (B/s, KB/s, MB/s, GB/s) | `No` | `No` / `Yes` | Scales network throughput to a friendlier unit; adds a `.unit` state. |
+| Normalize Data (MB, GB) | `No` | `No` / `Yes` | Scales SmallData (e.g. VRAM) to a friendlier unit; adds a `.unit` state. |
+| **FPS Source (Off/RTSS/Built-in/Auto)** | `Auto` | `Off` / `RTSS` / `Built-in` / `Auto` | **Applies live.** `Auto` = RTSS if running, else in-process ETW. |
 
-This button displays the current Used Percentage of the Memory and based on it's value, a Green/Orange/Red Memory Module icon - you choose your breakdown of Green/Orange/Red indicators <br><br>
-![](resources/Memory-Sample-Button.png)
+> [!NOTE]
+> The v1.x **"Hardware Monitor To Use"** setting is gone — LibreHardwareMonitor is embedded, so there's no external source to choose.
 
-### Display CPU Usage and Temperature
+---
 
-This button displays the current Load % and Temperature of my CPU Core.  I have combined this with (Touch Portal Dynamic Icons)[https://github.com/spdermn02/TouchPortal-Dynamic-Icons] Plugin to also show a round gauge as a visual for the CPU Load. For that generation I use an Event since I have these gauges on multiple pages <br><br>
+## 🎛️ Examples
+
+> State names vary with your hardware, so treat these as inspiration.
+
+### Memory usage
+Displays used memory %, with a Green/Orange/Red icon by threshold.
+
+![Memory sample button](resources/Memory-Sample-Button.png)
+
+### CPU usage & temperature
+Shows CPU load % and temperature, combined with [Touch Portal Dynamic Icons](https://github.com/spdermn02/TouchPortal-Dynamic-Icons) for a round gauge.
 
 Button:
-![CPU Load Button Example](resources/CPU-Button.png)
-<br><br>
-Event: This generates the dynamic gauge icon
-![CPU Load Dynamic Icon Event](resources/CPU-Gauge-Event.png)
 
-## ChangeLog
+![CPU button example](resources/CPU-Button.png)
+
+Event (generates the dynamic gauge icon):
+
+![CPU gauge event](resources/CPU-Gauge-Event.png)
+
+---
+
+## 🧪 Troubleshooting: missing CPU / motherboard temperatures
+
+If **GPU temps show up but CPU temps don't**, LibreHardwareMonitor's kernel driver (WinRing0) isn't loading. GPU (NVAPI), storage (SMART) and OS load/memory don't need it, but CPU temp/clock/voltage and motherboard sensors do. Work through these in order:
+
+1. **Run as administrator** — accept the UAC prompt. In Task Manager → *Details*, the *Elevated* column should read **Yes** for `TouchPortalHardwareMonitor.exe`.
+2. **Windows Memory Integrity** (Settings → Privacy & security → Windows Security → Device security → Core isolation) — if **On**, it blocks the driver. Turn it off and reboot. *(Security trade-off.)*
+3. **Close other monitoring apps** that hold the driver (HWiNFO, MSI Afterburner/RTSS, Armoury Crate, OpenRGB, Ryzen Master), then restart.
+4. **Check antivirus** for a quarantined `WinRing0` driver.
+
+The **`tp-hm.state.plugin.sensor_status`** state summarizes this in plain language.
+
+---
+
+## 🩺 Diagnostics
+
+- **Hardware dump** — drop an empty `dump_sensors.txt` next to the plugin `.exe` and restart. It writes `hardware_dump.json` with raw + converted values, units, assigned indexes, skip reasons, **elevation state**, a **sensor-access summary**, and even sensors LHM couldn't read.
+- **Verbose logging** — create `loglevel.txt` containing `DEBUG` next to the `.exe` for detailed `plugin.log` output.
+- **CLI probes** (run the exe directly):
+  - `TouchPortalHardwareMonitor.exe --displays` — list monitors + refresh rates and exit.
+  - `TouchPortalHardwareMonitor.exe --fps` — sample FPS for ~10s (run elevated, with a game open, to test the ETW backend).
+
+---
+
+## 🛠️ Build from source
+
+**Prerequisites:** [.NET 10 SDK](https://dotnet.microsoft.com/download), Windows x64.
+
+```powershell
+# from the repo root
+.\csharp-plugin\build.ps1
 ```
-1.0.0 - Initial Release
-1.0.1 - Bug Fixes and Update Notification addition
-      - Bugs: 
-         - removed some left over log messages
-      - Additions:
-         - added in Update Notification Process for post 1.0.1 releases
-         - changed Sensor Capture Interval times to be allowed 500(ms) to 99999(ms)
-      - Documentation:
-         - Corrected statements about generalized states being needed to share pages
-1.1.0 - Adding in a new Setting
-      - Additions:
-         - New Setting for Normalizing Throughput units
-         - Creates new Unit state when setting set to 'Yes'
-            - Divides unit by 1024 until it is less than 1024, and counts how many times it did that division to determine KB/s, MB/s, GB/s
-            - new Unit state is not created if this setting is 'No' initially.
-1.1.1 - Bug Fix
-      - Bug:
-         - Fixed the setting for where Hardware data comes from to actually use what you have in the settings, it was accidentally left as Hardcoded to LHM instead of allowing it to be overridden by the plugin settings value
-1.1.2 - Bug Fix
-      - Bug:
-         - Fixed the setting for where Sensor data comes from to actually use what you have in the settings, it was accidentally left as Hardcoded to LHM instead of allowing it to be overridden by the plugin settings value
-1.1.3 - Bug Fix
-      - Bug: 
-         - Removed useless logging left in from v1.1.2 testing
-1.1.4 - Bug Fix
-      - Bug:
-         - Read hardware attempts multiple tries before dying.
-1.1.5 - Bug Fix
-      - Bug:
-         - Make sure that each sensor has unique Identifier name, as some appear to use the same base name+
-1.2.0 - Data conversion Feature
-      - Feature:
-         - Added in SmallData conversion for things like Video Card RAM and any other sensor that is small data type.
-            -Note: This is controlled by a setting that is default No, to turn on go to the Plugin Settings in Touch Portal and change the value to Yes
-1.2.1 - Bug Fixes and minor Enhancement
-      - Bug: 
-         - Fixed data processing for small data, and removed extra log
-      - Enhancement:
-         - Hardware is now sorted by type then name, to keep it consistent between restarts of the plugin.
-1.2.2 - Bug Fixes
-      - Bug:
-          - Upon startup if no hardware data read, we need to enter the read loop, instead of trying to then read sensor data and bombing. changes will loop 60 times, waiting 1 second initially, and then subsequent waits will be incremented by 1 second. After that failure will occur, and error printed into logs.
 
-```
-## Build It
-If you are looking to build it yourself instead of the pre-setup .tpp file
-1) Clone the Repository
-2) `npm run build` to kick off and package the binary into a .tpp file ready to import to touch portal
+This publishes the self-contained plugin + launcher and packages them into `csharp-plugin\Installers\TouchPortalHardwareMonitor-Windows-<version>.tpp`, ready to import.
 
-## Versioning
+---
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/spdermn02/tpohm_plugin/tags).
+## ⚠️ Upgrading from v1.x
 
-## Authors
+- **Not an in-place upgrade** — the plugin folder/executable changed. Remove the v1.x plugin, then import 2.x.
+- **Hardware indexes may differ** — 2.x assigns persistent indexes on first run, so `tp-hm.state.GPU1.…` may map to a different device than in v1.x. **Re-point affected buttons.**
+- **"Hardware Monitor To Use" removed** — LibreHardwareMonitor is embedded.
+- **Administrator/UAC required** — declining the prompt prevents startup.
 
-- **Jameson Allen** - _Initial work_ - [Spdermn02](https://github.com/spdermn02)
+The base sensor state-ID format (`tp-hm.state.{TYPE}{index}.{SensorType}.{name}`) is unchanged; only the index→device mapping may move.
 
-## License
+---
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
+## 📦 Changelog
 
-## Acknowledgments
+See the [Releases](https://github.com/spdermn02/TouchPortal-HardwareMonitor/releases) page for full notes. The v1.x changelog lives in [README-v1.X.md](README-v1.X.md).
 
-- Thank you to Open Hardware Monitor/Libre Hardware Monitor for writing your statstics somewhere accessible
-- Thank you to Ty and Reinier for creating and developing Touch Portal
-- Thank you to Sora for testing this out for me.
+- **2.x** — full C# / .NET 10 rewrite; embedded LibreHardwareMonitor; elevated launcher; `.unit`/`.min`/`.max` companion states; persistent hardware indexes; display refresh-rate states; selectable-source FPS states; live capture-interval & FPS-source settings; sensor-access diagnostics.
+
+---
+
+## 🔖 Versioning
+
+We use [SemVer](http://semver.org/). See the [tags](https://github.com/spdermn02/TouchPortal-HardwareMonitor/tags) for available versions.
+
+## 👤 Authors
+
+- **Jameson Allen** — [Spdermn02](https://github.com/spdermn02)
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE).
+
+## 🙏 Acknowledgments
+
+- [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) for the sensor library
+- Ty and Reinier for creating and developing Touch Portal
+- Sora for testing
