@@ -96,7 +96,7 @@ class Program
             var dump = new DiagnosticDump
             {
                 Timestamp = DateTime.Now.ToString("o"),
-                PluginVersion = "2.1.0",
+                PluginVersion = "2.2.0",
                 IsElevated = _isElevated,
                 SensorAccess = DetectSensorAccessStatus(rawSensorData).Message,
                 Settings = new DiagnosticSettings
@@ -423,7 +423,27 @@ class Program
             return;
         }
 
-        Log("Touch Portal Hardware Monitor v2.1.0 starting...");
+        // Quick standalone probe: sample FPS for ~10s and exit. Run elevated
+        // with a game in the foreground to test the ETW backend.
+        if (args.Contains("--fps"))
+        {
+            _isElevated = IsProcessElevated();
+            Console.WriteLine($"Elevated: {_isElevated}");
+            using var probe = new FpsService();
+            probe.Configure(FpsMode.Auto);
+            if (probe.EtwError != null) Console.WriteLine($"ETW backend error: {probe.EtwError}");
+            for (int i = 0; i < 10; i++)
+            {
+                await Task.Delay(1000);
+                var r = probe.GetForegroundFps();
+                Console.WriteLine(r.HasValue
+                    ? $"FPS={r.Value.Fps:F1}  source={r.Value.Source}  app={r.Value.ProcessName}"
+                    : "FPS=(none - no presenting app / backend unavailable)");
+            }
+            return;
+        }
+
+        Log("Touch Portal Hardware Monitor v2.2.0 starting...");
 
         // Initialize log level from file (before anything else)
         InitializeLogLevel();
@@ -458,6 +478,14 @@ class Program
             Log("Initializing LibreHardwareMonitor...");
             _hwService = new HardwareMonitorService();
             Log("LibreHardwareMonitor initialized successfully");
+
+            // Initialize FPS reporting (Auto by default; a setting may change it)
+            _fpsService = new FpsService();
+            _fpsService.Configure(_fpsMode);
+            if (_fpsService.EtwError != null)
+            {
+                Log($"FPS: in-process ETW backend unavailable ({_fpsService.EtwError}). RTSS will be used if it is running.");
+            }
 
             // Initialize Touch Portal client
             _tpClient = new TouchPortalClient(PluginId);
@@ -536,6 +564,15 @@ class Program
                         break;
                     case "Normalize Data (MB, GB)":
                         _normalizeData = kvp.Value;
+                        break;
+                    case "FPS Source (Off/RTSS/Built-in/Auto)":
+                        var newMode = FpsService.ParseMode(kvp.Value);
+                        if (newMode != _fpsMode)
+                        {
+                            _fpsMode = newMode;
+                            _fpsService?.Configure(_fpsMode);
+                            LogDebug($"[Settings] FPS source set to: {_fpsMode}");
+                        }
                         break;
                 }
             }
@@ -790,8 +827,12 @@ class Program
     private static DateTime _lastCreateStateTime = DateTime.MinValue;
     private static readonly TimeSpan _createStateCooldown = TimeSpan.FromSeconds(5);
 
-    // Last-sent value per display state id, for change detection.
+    // Last-sent value per display/FPS state id, for change detection.
     private static readonly Dictionary<string, string> _displayStateCache = new();
+
+    // FPS (frames-per-second) reporting - independent of LibreHardwareMonitor.
+    private static FpsService? _fpsService;
+    private static FpsMode _fpsMode = FpsMode.Auto;
 
     private static async Task CaptureAsync()
     {
@@ -1021,6 +1062,9 @@ class Program
             // Display states (refresh rate / resolution) - not from LibreHardwareMonitor
             AddDisplayStates(newStates, stateUpdates);
 
+            // FPS states (foreground app frame rate) - not from LibreHardwareMonitor
+            AddFpsStates(newStates, stateUpdates);
+
             // Send state creates to Touch Portal
             LogDebug($"[Capture] newStates.Count = {newStates.Count}, stateUpdates.Count = {stateUpdates.Count}");
 
@@ -1205,6 +1249,39 @@ class Program
         UpsertDisplayState(newStates, stateUpdates, "tp-hm.state.display.count", $"{group} > Display Count", group, displays.Count.ToString());
     }
 
+    // Build/refresh FPS states for the foreground app. Uses the configured
+    // FPS source (RTSS / in-process ETW / Auto); independent of LibreHardwareMonitor.
+    private static void AddFpsStates(List<TPStateDefinition> newStates, List<TPStateValue> stateUpdates)
+    {
+        if (_fpsService == null || _fpsMode == FpsMode.Off)
+        {
+            return;
+        }
+
+        FpsReading? reading;
+        try
+        {
+            reading = _fpsService.GetForegroundFps();
+        }
+        catch (Exception ex)
+        {
+            LogDebug($"[FPS] read failed: {ex.Message}");
+            return;
+        }
+
+        const string group = "FPS";
+        var value = reading.HasValue ? Math.Round(reading.Value.Fps).ToString("F0") : "0";
+        var app = reading?.ProcessName ?? "";
+        var source = reading?.Source ?? "";
+
+        UpsertDisplayState(newStates, stateUpdates, "tp-hm.state.fps.value", $"{group} > Current FPS", group, value);
+        UpsertDisplayState(newStates, stateUpdates, "tp-hm.state.fps.unit", $"{group} > Current FPS Unit", group, "FPS");
+        UpsertDisplayState(newStates, stateUpdates, "tp-hm.state.fps.process", $"{group} > Foreground App", group, app);
+        UpsertDisplayState(newStates, stateUpdates, "tp-hm.state.fps.source", $"{group} > FPS Source", group, source);
+    }
+
+    // Upsert helper shared by display and FPS states: create the state the
+    // first time an id is seen, then push an update only when its value changes.
     private static void UpsertDisplayState(List<TPStateDefinition> newStates, List<TPStateValue> stateUpdates,
         string id, string desc, string group, string value)
     {
@@ -1241,6 +1318,9 @@ class Program
 
         _hwService?.Dispose();
         _hwService = null;
+
+        _fpsService?.Dispose();
+        _fpsService = null;
 
         _tpClient?.Dispose();
         _tpClient = null;
