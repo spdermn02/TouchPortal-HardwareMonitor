@@ -43,6 +43,17 @@ public class SensorItem
     public SensorStateInfo? StateId { get; set; }
 }
 
+// A connected display, sourced from Win32 (not LibreHardwareMonitor).
+public class DisplayInfo
+{
+    public int Index { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool IsPrimary { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public int RefreshRateHz { get; set; }
+}
+
 public class SensorStateInfo
 {
     public string Id { get; set; } = string.Empty;
