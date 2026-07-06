@@ -9,7 +9,13 @@ namespace TouchPortalHardwareMonitor;
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    PropertyNameCaseInsensitive = true)]
+    PropertyNameCaseInsensitive = true,
+    // Sensors can report non-finite values (e.g. Infinity/NaN from a
+    // divide-by-zero on adapters with 0 link speed). Without this, the
+    // diagnostic dump throws mid-write and produces a truncated, invalid
+    // file. Writing them as "Infinity"/"NaN" keeps the dump valid and
+    // preserves the signal for diagnosis.
+    NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals)]
 [JsonSerializable(typeof(List<HardwareMapping>))]
 [JsonSerializable(typeof(TPInfoMessage))]
 [JsonSerializable(typeof(TPSettingsMessage))]

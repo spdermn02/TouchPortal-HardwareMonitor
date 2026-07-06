@@ -91,7 +91,7 @@ class Program
             var dump = new DiagnosticDump
             {
                 Timestamp = DateTime.Now.ToString("o"),
-                PluginVersion = "2.0.0",
+                PluginVersion = "2.0.1",
                 Settings = new DiagnosticSettings
                 {
                     CaptureInterval = _captureInterval,
@@ -353,7 +353,7 @@ class Program
 
     static async Task Main(string[] args)
     {
-        Log("Touch Portal Hardware Monitor v2.0.0 starting...");
+        Log("Touch Portal Hardware Monitor v2.0.1 starting...");
 
         // Initialize log level from file (before anything else)
         InitializeLogLevel();
@@ -745,6 +745,20 @@ class Program
                     continue;
                 }
 
+                // Skip non-finite values (Infinity/NaN). These occur e.g. when
+                // LibreHardwareMonitor computes utilization against a 0 link
+                // speed. Sending them to Touch Portal shows garbage ("Infinity"/
+                // "NaN") that never clears, because the change check below
+                // (Math.Abs(existing - NaN) > 0.01) is always false.
+                if (!float.IsFinite(sensor.Value))
+                {
+                    if (isFirstCapture && _debugLogging)
+                    {
+                        LogDebug($"Skipped sensor with non-finite value: {sensor.Name} ({sensor.SensorType}) on {hardwareKey} = {sensor.Value}");
+                    }
+                    continue;
+                }
+
                 var stateInfo = BuildSensorStateId(hardwareKey, sensor);
                 sensor.StateId = stateInfo;
 
@@ -791,7 +805,7 @@ class Program
                     }
 
                     // Add min state if available (defaultValue is the actual min)
-                    if (sensor.Min.HasValue)
+                    if (sensor.Min.HasValue && float.IsFinite(sensor.Min.Value))
                     {
                         var minValue = sensor.Min.Value % 1 != 0
                             ? sensor.Min.Value.ToString("F1")
@@ -807,7 +821,7 @@ class Program
                     }
 
                     // Add max state if available (defaultValue is the actual max)
-                    if (sensor.Max.HasValue)
+                    if (sensor.Max.HasValue && float.IsFinite(sensor.Max.Value))
                     {
                         var maxValue = sensor.Max.Value % 1 != 0
                             ? sensor.Max.Value.ToString("F1")
@@ -827,8 +841,8 @@ class Program
                     // Existing sensor - update if changed
                     var existing = hw.Sensors[uniqueId];
                     var valueChanged = Math.Abs(existing.Value - sensor.Value) > 0.01f;
-                    var minChanged = sensor.Min.HasValue && (!existing.Min.HasValue || Math.Abs(existing.Min.Value - sensor.Min.Value) > 0.01f);
-                    var maxChanged = sensor.Max.HasValue && (!existing.Max.HasValue || Math.Abs(existing.Max.Value - sensor.Max.Value) > 0.01f);
+                    var minChanged = sensor.Min.HasValue && float.IsFinite(sensor.Min.Value) && (!existing.Min.HasValue || Math.Abs(existing.Min.Value - sensor.Min.Value) > 0.01f);
+                    var maxChanged = sensor.Max.HasValue && float.IsFinite(sensor.Max.Value) && (!existing.Max.HasValue || Math.Abs(existing.Max.Value - sensor.Max.Value) > 0.01f);
 
                     if (valueChanged || minChanged || maxChanged)
                     {
