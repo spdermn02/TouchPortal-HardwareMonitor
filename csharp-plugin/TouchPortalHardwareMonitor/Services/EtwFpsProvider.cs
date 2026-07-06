@@ -60,11 +60,13 @@ public sealed class EtwFpsProvider : IDisposable
 
             _sampleTimer = new System.Threading.Timer(_ => Sample(), null, 1000, 1000);
             Running = true;
+            FpsService.Dbg($"[FPS] ETW session '{SessionName}' started (DXGI/D3D9 present events).");
             return true;
         }
         catch (Exception ex)
         {
             LastError = ex.Message;
+            FpsService.Dbg($"[FPS] ETW session failed to start: {ex.Message}");
             Stop();
             return false;
         }

@@ -30,6 +30,16 @@ public sealed class FpsService : IDisposable
     public string? PresentMonError { get; private set; }
     public bool EtwRunning => _etw?.Running == true;
     public bool PresentMonRunning => _pm?.Running == true;
+    public bool RtssAvailable => _rtss.IsAvailable();
+    public FpsMode Mode => _mode;
+
+    /// <summary>
+    /// Optional DEBUG sink shared by the FPS backends. Program wires this to
+    /// LogDebug (only active when loglevel.txt = DEBUG).
+    /// </summary>
+    public static Action<string>? DebugLog { get; set; }
+
+    internal static void Dbg(string message) => DebugLog?.Invoke(message);
 
     public static FpsMode ParseMode(string? value)
     {
@@ -81,6 +91,10 @@ public sealed class FpsService : IDisposable
                 }
                 break;
         }
+
+        Dbg($"[FPS] mode={_mode} | RTSS avail={_rtss.IsAvailable()} | " +
+            $"PresentMon={(_pm?.Running == true ? "running" : "off")}{(PresentMonError != null ? $" (err: {PresentMonError})" : "")} | " +
+            $"ETW={(_etw?.Running == true ? "running" : "off")}{(EtwError != null ? $" (err: {EtwError})" : "")}");
     }
 
     public FpsReading? GetForegroundFps()

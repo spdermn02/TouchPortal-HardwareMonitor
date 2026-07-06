@@ -99,11 +99,13 @@ public sealed class PresentMonFpsProvider : IDisposable
             _proc.BeginOutputReadLine();
             _proc.BeginErrorReadLine();
             Running = true;
+            FpsService.Dbg($"[FPS] PresentMon started (pid {_proc.Id}) from {_runPath}");
             return true;
         }
         catch (Exception ex)
         {
             LastError = ex.Message;
+            FpsService.Dbg($"[FPS] PresentMon failed to start: {ex.Message}");
             Stop();
             return false;
         }
@@ -127,6 +129,9 @@ public sealed class PresentMonFpsProvider : IDisposable
                 else if (c.Equals("Application", StringComparison.OrdinalIgnoreCase)) _appCol = i;
             }
             _headerParsed = _pidCol >= 0 && _msCol >= 0;
+            FpsService.Dbg(_headerParsed
+                ? $"[FPS] PresentMon CSV header parsed (pidCol={_pidCol}, msCol={_msCol}, appCol={_appCol})"
+                : "[FPS] PresentMon CSV header missing ProcessID/msBetweenPresents columns");
             return;
         }
 

@@ -429,6 +429,7 @@ class Program
         {
             _isElevated = IsProcessElevated();
             Console.WriteLine($"Elevated: {_isElevated}");
+            FpsService.DebugLog = Console.WriteLine;   // verbose backend logging for the probe
             using var probe = new FpsService();
             probe.Configure(FpsMode.Auto);
             if (probe.EtwError != null) Console.WriteLine($"ETW backend error: {probe.EtwError}");
@@ -481,6 +482,7 @@ class Program
 
             // Initialize FPS reporting (Auto by default; a setting may change it)
             _fpsService = new FpsService();
+            FpsService.DebugLog = LogDebug;   // DEBUG-gated backend logging
             _fpsService.Configure(_fpsMode);
             if (_fpsService.PresentMonError != null)
             {
@@ -1271,6 +1273,13 @@ class Program
         {
             LogDebug($"[FPS] read failed: {ex.Message}");
             return;
+        }
+
+        if (_debugLogging)
+        {
+            LogDebug(reading.HasValue
+                ? $"[FPS] value={reading.Value.Fps:F1} source={reading.Value.Source} app={reading.Value.ProcessName}"
+                : $"[FPS] no reading (mode={_fpsMode}, rtssAvail={_fpsService.RtssAvailable}, pmRunning={_fpsService.PresentMonRunning}, etwRunning={_fpsService.EtwRunning})");
         }
 
         const string group = "FPS";
