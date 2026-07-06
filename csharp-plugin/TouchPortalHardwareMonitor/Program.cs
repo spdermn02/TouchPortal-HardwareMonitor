@@ -96,7 +96,7 @@ class Program
             var dump = new DiagnosticDump
             {
                 Timestamp = DateTime.Now.ToString("o"),
-                PluginVersion = "2.0.2",
+                PluginVersion = "2.1.0",
                 IsElevated = _isElevated,
                 SensorAccess = DetectSensorAccessStatus(rawSensorData).Message,
                 Settings = new DiagnosticSettings
@@ -413,7 +413,17 @@ class Program
 
     static async Task Main(string[] args)
     {
-        Log("Touch Portal Hardware Monitor v2.0.2 starting...");
+        // Quick standalone probe: list displays and exit (no TP connection).
+        if (args.Contains("--displays"))
+        {
+            foreach (var d in DisplayInfoService.GetDisplays())
+            {
+                Console.WriteLine($"Display {d.Index}{(d.IsPrimary ? " (Primary)" : "")}: {d.Width}x{d.Height} @ {d.RefreshRateHz} Hz - {d.Name}");
+            }
+            return;
+        }
+
+        Log("Touch Portal Hardware Monitor v2.1.0 starting...");
 
         // Initialize log level from file (before anything else)
         InitializeLogLevel();
@@ -780,6 +790,9 @@ class Program
     private static DateTime _lastCreateStateTime = DateTime.MinValue;
     private static readonly TimeSpan _createStateCooldown = TimeSpan.FromSeconds(5);
 
+    // Last-sent value per display state id, for change detection.
+    private static readonly Dictionary<string, string> _displayStateCache = new();
+
     private static async Task CaptureAsync()
     {
         try
@@ -1005,6 +1018,9 @@ class Program
                 }
             }
 
+            // Display states (refresh rate / resolution) - not from LibreHardwareMonitor
+            AddDisplayStates(newStates, stateUpdates);
+
             // Send state creates to Touch Portal
             LogDebug($"[Capture] newStates.Count = {newStates.Count}, stateUpdates.Count = {stateUpdates.Count}");
 
@@ -1154,6 +1170,60 @@ class Program
     private static string GetThroughputUnit(int count)
     {
         return GetDataUnit(count) + "/s";
+    }
+
+    // Build/refresh display states (refresh rate, resolution, name) sourced
+    // from Win32 - independent of LibreHardwareMonitor. New displays create
+    // states; changed values (e.g. a mode switch) push updates.
+    private static void AddDisplayStates(List<TPStateDefinition> newStates, List<TPStateValue> stateUpdates)
+    {
+        List<DisplayInfo> displays;
+        try
+        {
+            displays = DisplayInfoService.GetDisplays();
+        }
+        catch (Exception ex)
+        {
+            LogDebug($"[Display] Failed to enumerate displays: {ex.Message}");
+            return;
+        }
+
+        const string group = "Displays";
+
+        foreach (var d in displays)
+        {
+            var label = d.IsPrimary ? $"Display {d.Index} (Primary)" : $"Display {d.Index}";
+            var baseId = $"tp-hm.state.display.{d.Index}";
+
+            UpsertDisplayState(newStates, stateUpdates, $"{baseId}.refresh_rate", $"{group} > {label} > Refresh Rate (Hz)", group, d.RefreshRateHz.ToString());
+            UpsertDisplayState(newStates, stateUpdates, $"{baseId}.refresh_rate.unit", $"{group} > {label} > Refresh Rate Unit", group, "Hz");
+            UpsertDisplayState(newStates, stateUpdates, $"{baseId}.resolution", $"{group} > {label} > Resolution", group, $"{d.Width}x{d.Height}");
+            UpsertDisplayState(newStates, stateUpdates, $"{baseId}.name", $"{group} > {label} > Name", group, d.Name);
+            UpsertDisplayState(newStates, stateUpdates, $"{baseId}.primary", $"{group} > {label} > Is Primary", group, d.IsPrimary ? "true" : "false");
+        }
+
+        UpsertDisplayState(newStates, stateUpdates, "tp-hm.state.display.count", $"{group} > Display Count", group, displays.Count.ToString());
+    }
+
+    private static void UpsertDisplayState(List<TPStateDefinition> newStates, List<TPStateValue> stateUpdates,
+        string id, string desc, string group, string value)
+    {
+        if (!_displayStateCache.TryGetValue(id, out var existing))
+        {
+            _displayStateCache[id] = value;
+            newStates.Add(new TPStateDefinition
+            {
+                Id = id,
+                Desc = desc,
+                DefaultValue = value,
+                ParentGroup = group
+            });
+        }
+        else if (existing != value)
+        {
+            _displayStateCache[id] = value;
+            stateUpdates.Add(new TPStateValue { Id = id, Value = value });
+        }
     }
 
     private static void Shutdown()
