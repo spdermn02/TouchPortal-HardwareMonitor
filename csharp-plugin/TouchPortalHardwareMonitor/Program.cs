@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.NetworkInformation;
 using System.Security.Principal;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using TouchPortalHardwareMonitor.Models;
@@ -1128,11 +1130,34 @@ class Program
         { "Humidity", "Humidity" }
     };
 
+    // Build the sensor-name portion of a Touch Portal state ID. TP state IDs
+    // must be plain ASCII identifiers, but LibreHardwareMonitor names can carry
+    // non-ASCII (e.g. a French cooler's "T° Eau 360" / "Débitmetre"), which TP
+    // rejects. Transliterate accents to ASCII and drop remaining non-ASCII, but
+    // keep every ASCII character exactly as before so existing state IDs are
+    // unchanged (no broken buttons). The original name is kept in the state
+    // description elsewhere.
+    private static string SanitizeStateSegment(string name)
+    {
+        var lowered = name.ToLowerInvariant().Replace(" ", ".").Replace("#", "");
+        var decomposed = lowered.Normalize(NormalizationForm.FormD);
+
+        var sb = new StringBuilder(decomposed.Length);
+        foreach (var ch in decomposed)
+        {
+            // Drop combining accent marks left by decomposition (é -> e).
+            if (CharUnicodeInfo.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark) continue;
+            // Keep ASCII as-is; drop non-ASCII symbols (e.g. the degree sign).
+            if (ch <= '\x7F') sb.Append(ch);
+        }
+        return sb.ToString();
+    }
+
     private static SensorStateInfo BuildSensorStateId(string hardwareKey, SensorItem sensor)
     {
         var hw = _hardware[hardwareKey];
         var sensorType = sensor.SensorType;
-        var sensorName = sensor.Name.ToLower().Replace(" ", ".").Replace("#", "");
+        var sensorName = SanitizeStateSegment(sensor.Name);
         var indexNum = hw.Index > 0 ? hw.Index.ToString() : "";
 
         // State ID remains unchanged for backwards compatibility
