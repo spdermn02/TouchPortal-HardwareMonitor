@@ -40,6 +40,39 @@ public class HardwareMonitorService : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Update all hardware a few times before the first discovery/capture.
+    /// Some values only appear after a warm-up: AMD CPU temperatures (Tctl/Tdie,
+    /// SoC, per-CCD) are read behind a short PCI-bus mutex and their CCD sensors
+    /// are created lazily only on a valid (non-zero) read, so a single early read
+    /// during app startup can miss them; and delta-based sensors (clocks, power)
+    /// need two spaced samples. Spacing the passes gives those reads a real
+    /// chance to succeed and populate.
+    /// </summary>
+    public void WarmUp(int passes = 3, int delayMs = 400)
+    {
+        for (int i = 0; i < passes; i++)
+        {
+            UpdateAll(_computer.Hardware);
+            if (i < passes - 1)
+            {
+                Thread.Sleep(delayMs);
+            }
+        }
+    }
+
+    private static void UpdateAll(IEnumerable<IHardware> hardwareList)
+    {
+        foreach (var hardware in hardwareList)
+        {
+            hardware.Update();
+            if (hardware.SubHardware.Length > 0)
+            {
+                UpdateAll(hardware.SubHardware);
+            }
+        }
+    }
+
     private void CollectHardware(IEnumerable<IHardware> hardwareList, List<HardwareItem> result)
     {
         foreach (var hardware in hardwareList)

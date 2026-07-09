@@ -98,7 +98,7 @@ class Program
             var dump = new DiagnosticDump
             {
                 Timestamp = DateTime.Now.ToString("o"),
-                PluginVersion = "2.2.1",
+                PluginVersion = "2.2.2",
                 IsElevated = _isElevated,
                 SensorAccess = DetectSensorAccessStatus(rawSensorData).Message,
                 Settings = new DiagnosticSettings
@@ -446,7 +446,7 @@ class Program
             return;
         }
 
-        Log("Touch Portal Hardware Monitor v2.2.1 starting...");
+        Log("Touch Portal Hardware Monitor v2.2.2 starting...");
 
         // Initialize log level from file (before anything else)
         InitializeLogLevel();
@@ -632,11 +632,30 @@ class Program
 
         try
         {
+            // Warm up before discovery: AMD CPU temps (Tctl/Tdie, SoC, per-CCD)
+            // and delta-based clocks/power often need a few spaced updates before
+            // they read/enumerate, so a single startup read can miss them.
+            LogDebug("[Hardware] Warming up sensors...");
+            _hwService?.WarmUp();
+
             LogDebug("[Hardware] Calling _hwService.GetHardware()...");
             var hardwareData = _hwService?.GetHardware();
             var sensorData = _hwService?.GetSensors();
             LogDebug($"[Hardware] GetHardware returned: {hardwareData?.Count ?? -1} items");
             LogDebug($"[Hardware] GetSensors returned: {sensorData?.Count ?? -1} sensors");
+
+            // Surface CPU temperature discovery for diagnosing AMD/Intel temp gaps.
+            if (_debugLogging && sensorData != null)
+            {
+                var cpuTemps = sensorData
+                    .Where(s => s.SensorType == "Temperature" && s.Parent.Contains("cpu", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                LogDebug($"[Hardware] CPU temperature sensors after warm-up: {cpuTemps.Count}");
+                foreach (var t in cpuTemps)
+                {
+                    LogDebug($"[Hardware]   {t.Name} = {t.Value}");
+                }
+            }
 
             if (hardwareData == null || hardwareData.Count == 0)
             {
