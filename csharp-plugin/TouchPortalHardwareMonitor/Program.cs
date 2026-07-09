@@ -98,7 +98,7 @@ class Program
             var dump = new DiagnosticDump
             {
                 Timestamp = DateTime.Now.ToString("o"),
-                PluginVersion = "2.2.1",
+                PluginVersion = CurrentVersion,
                 IsElevated = _isElevated,
                 SensorAccess = DetectSensorAccessStatus(rawSensorData).Message,
                 Settings = new DiagnosticSettings
@@ -229,13 +229,18 @@ class Program
     }
 
     private const string PluginId = "TP_HM";
-    private const string UpdateUrl = "https://raw.githubusercontent.com/spdermn02/TouchPortal-HardwareMonitor/main/package.json";
+    // Single source of truth for the running plugin version (dump, logs, update check).
+    private const string CurrentVersion = "2.2.2";
     private const string ReleaseUrl = "https://github.com/spdermn02/TouchPortal-HardwareMonitor/releases";
+    private const string PawnIoUrl = "https://pawnio.eu";
     private const int MaxWaitTime = 60000;
     private const int StartCaptureWaitTime = 2000;
 
     private static TouchPortalClient? _tpClient;
     private static HardwareMonitorService? _hwService;
+    private static PawnIoService? _pawnIo;
+    private static bool _pawnIoJustInstalled = false;
+    private static readonly UpdateService _updateService = new();
     private static readonly Dictionary<string, HardwareItem> _hardware = new();
 
     private static int _captureInterval = 2000;
@@ -446,7 +451,7 @@ class Program
             return;
         }
 
-        Log("Touch Portal Hardware Monitor v2.2.1 starting...");
+        Log($"Touch Portal Hardware Monitor v{CurrentVersion} starting...");
 
         // Initialize log level from file (before anything else)
         InitializeLogLevel();
@@ -476,6 +481,28 @@ class Program
         {
             // Load persistent hardware mapping
             LoadHardwareMapping();
+
+            // Ensure the PawnIO kernel driver is present. LibreHardwareMonitor
+            // reads CPU temperatures/clocks/voltages through it; without it those
+            // sensors don't appear. Must run before LHM initializes.
+            _pawnIo = new PawnIoService();
+            var pawnResult = await _pawnIo.EnsureInstalledAsync(_isElevated, LogDebug);
+            switch (pawnResult)
+            {
+                case PawnIoResult.AlreadyInstalled:
+                    LogDebug("[PawnIO] driver already installed.");
+                    break;
+                case PawnIoResult.Installed:
+                    _pawnIoJustInstalled = true;
+                    Log("Installed the PawnIO kernel driver (required for CPU temperature/clock/voltage sensors). A Touch Portal restart is needed to activate them.");
+                    break;
+                case PawnIoResult.InstallFailed:
+                    Log($"PawnIO install failed: {_pawnIo.LastError} CPU temperature/clock/voltage sensors may be unavailable.");
+                    break;
+                case PawnIoResult.NotElevated:
+                    Log("Not elevated; skipping PawnIO install. CPU temperature/clock/voltage sensors may be unavailable.");
+                    break;
+            }
 
             // Initialize hardware monitor service
             Log("Initializing LibreHardwareMonitor...");
@@ -513,6 +540,16 @@ class Program
             Log("Connecting to Touch Portal...");
             await _tpClient.ConnectAsync();
             Log("Connected to Touch Portal");
+
+            // If we just installed PawnIO, let the user know via a Touch Portal
+            // notification (and that a restart is needed to activate CPU sensors).
+            if (_pawnIoJustInstalled)
+            {
+                SendPawnIoInstalledNotification();
+            }
+
+            // Check for a newer release (non-blocking).
+            _ = CheckForUpdatesAsync();
 
             // Keep running
             await Task.Delay(Timeout.Infinite);
@@ -623,6 +660,57 @@ class Program
                 _tpClient?.LogIt("ERROR", $"Failed to open release URL: {ex.Message}");
             }
         }
+        else if (optionId == $"{PluginId}_pawnio_installed_learn_more")
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = PawnIoUrl,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                _tpClient?.LogIt("ERROR", $"Failed to open PawnIO URL: {ex.Message}");
+            }
+        }
+    }
+
+    private static async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            var newVersion = await _updateService.CheckForUpdateAsync(CurrentVersion, LogDebug);
+            if (!string.IsNullOrEmpty(newVersion))
+            {
+                Log($"Update available: {newVersion} (installed: {CurrentVersion})");
+                _tpClient?.SendNotification(
+                    $"{PluginId}_update_notification_{newVersion}",
+                    "Hardware Monitor Plugin Update Available",
+                    $"New Version: {newVersion}\n\nPlease update to get the latest bug fixes and new features.\n\nCurrent Installed Version: {CurrentVersion}",
+                    new List<TPNotificationOption>
+                    {
+                        new() { Id = $"{PluginId}_update_notification_go_to_download", Title = "Go To Download Location" }
+                    });
+            }
+        }
+        catch (Exception ex)
+        {
+            LogDebug($"[Update] check error: {ex.Message}");
+        }
+    }
+
+    private static void SendPawnIoInstalledNotification()
+    {
+        _tpClient?.SendNotification(
+            $"{PluginId}_pawnio_installed",
+            "Hardware driver installed (PawnIO)",
+            "To read CPU temperatures, clocks and voltages, Touch Portal Hardware Monitor installed PawnIO - a signed, scriptable kernel driver that gives applications safe low-level hardware access (also used by tools like Fan Control and OpenRGB). It replaces the older WinRing0 driver that antivirus often flagged. Please restart Touch Portal to activate these sensors.",
+            new List<TPNotificationOption>
+            {
+                new() { Id = $"{PluginId}_pawnio_installed_learn_more", Title = "About PawnIO" }
+            });
     }
 
     private static async Task BuildHardwareList()
@@ -632,11 +720,30 @@ class Program
 
         try
         {
+            // Warm up before discovery: AMD CPU temps (Tctl/Tdie, SoC, per-CCD)
+            // and delta-based clocks/power often need a few spaced updates before
+            // they read/enumerate, so a single startup read can miss them.
+            LogDebug("[Hardware] Warming up sensors...");
+            _hwService?.WarmUp();
+
             LogDebug("[Hardware] Calling _hwService.GetHardware()...");
             var hardwareData = _hwService?.GetHardware();
             var sensorData = _hwService?.GetSensors();
             LogDebug($"[Hardware] GetHardware returned: {hardwareData?.Count ?? -1} items");
             LogDebug($"[Hardware] GetSensors returned: {sensorData?.Count ?? -1} sensors");
+
+            // Surface CPU temperature discovery for diagnosing AMD/Intel temp gaps.
+            if (_debugLogging && sensorData != null)
+            {
+                var cpuTemps = sensorData
+                    .Where(s => s.SensorType == "Temperature" && s.Parent.Contains("cpu", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                LogDebug($"[Hardware] CPU temperature sensors after warm-up: {cpuTemps.Count}");
+                foreach (var t in cpuTemps)
+                {
+                    LogDebug($"[Hardware]   {t.Name} = {t.Value}");
+                }
+            }
 
             if (hardwareData == null || hardwareData.Count == 0)
             {

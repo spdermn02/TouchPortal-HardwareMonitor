@@ -8,7 +8,7 @@ $publishDir = "$projectDir\bin\Release\net10.0\win-x64\publish"
 $launcherPublishDir = "$launcherDir\bin\Release\net10.0\win-x64\publish"
 $installersDir = "$PSScriptRoot\Installers"
 $pluginName = "TouchPortalHardwareMonitor"
-$version = "2.2.1"
+$version = "2.2.2"
 
 # PresentMon (Intel, MIT) is bundled for the accurate FPS backend. The binary
 # is NOT committed to the repo - it's downloaded here into tools\ (gitignored)
