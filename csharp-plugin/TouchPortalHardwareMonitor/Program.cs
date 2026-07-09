@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.NetworkInformation;
 using System.Security.Principal;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using TouchPortalHardwareMonitor.Models;
@@ -96,7 +98,7 @@ class Program
             var dump = new DiagnosticDump
             {
                 Timestamp = DateTime.Now.ToString("o"),
-                PluginVersion = "2.2.0",
+                PluginVersion = "2.2.1",
                 IsElevated = _isElevated,
                 SensorAccess = DetectSensorAccessStatus(rawSensorData).Message,
                 Settings = new DiagnosticSettings
@@ -429,6 +431,7 @@ class Program
         {
             _isElevated = IsProcessElevated();
             Console.WriteLine($"Elevated: {_isElevated}");
+            FpsService.DebugLog = Console.WriteLine;   // verbose backend logging for the probe
             using var probe = new FpsService();
             probe.Configure(FpsMode.Auto);
             if (probe.EtwError != null) Console.WriteLine($"ETW backend error: {probe.EtwError}");
@@ -443,7 +446,7 @@ class Program
             return;
         }
 
-        Log("Touch Portal Hardware Monitor v2.2.0 starting...");
+        Log("Touch Portal Hardware Monitor v2.2.1 starting...");
 
         // Initialize log level from file (before anything else)
         InitializeLogLevel();
@@ -481,7 +484,12 @@ class Program
 
             // Initialize FPS reporting (Auto by default; a setting may change it)
             _fpsService = new FpsService();
+            FpsService.DebugLog = LogDebug;   // DEBUG-gated backend logging
             _fpsService.Configure(_fpsMode);
+            if (_fpsService.PresentMonError != null)
+            {
+                Log($"FPS: PresentMon backend unavailable ({_fpsService.PresentMonError}).");
+            }
             if (_fpsService.EtwError != null)
             {
                 Log($"FPS: in-process ETW backend unavailable ({_fpsService.EtwError}). RTSS will be used if it is running.");
@@ -565,7 +573,7 @@ class Program
                     case "Normalize Data (MB, GB)":
                         _normalizeData = kvp.Value;
                         break;
-                    case "FPS Source (Off/RTSS/Built-in/Auto)":
+                    case "FPS Source (Off/RTSS/PresentMon/Built-in/Auto)":
                         var newMode = FpsService.ParseMode(kvp.Value);
                         if (newMode != _fpsMode)
                         {
@@ -1122,11 +1130,34 @@ class Program
         { "Humidity", "Humidity" }
     };
 
+    // Build the sensor-name portion of a Touch Portal state ID. TP state IDs
+    // must be plain ASCII identifiers, but LibreHardwareMonitor names can carry
+    // non-ASCII (e.g. a French cooler's "T° Eau 360" / "Débitmetre"), which TP
+    // rejects. Transliterate accents to ASCII and drop remaining non-ASCII, but
+    // keep every ASCII character exactly as before so existing state IDs are
+    // unchanged (no broken buttons). The original name is kept in the state
+    // description elsewhere.
+    private static string SanitizeStateSegment(string name)
+    {
+        var lowered = name.ToLowerInvariant().Replace(" ", ".").Replace("#", "");
+        var decomposed = lowered.Normalize(NormalizationForm.FormD);
+
+        var sb = new StringBuilder(decomposed.Length);
+        foreach (var ch in decomposed)
+        {
+            // Drop combining accent marks left by decomposition (é -> e).
+            if (CharUnicodeInfo.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark) continue;
+            // Keep ASCII as-is; drop non-ASCII symbols (e.g. the degree sign).
+            if (ch <= '\x7F') sb.Append(ch);
+        }
+        return sb.ToString();
+    }
+
     private static SensorStateInfo BuildSensorStateId(string hardwareKey, SensorItem sensor)
     {
         var hw = _hardware[hardwareKey];
         var sensorType = sensor.SensorType;
-        var sensorName = sensor.Name.ToLower().Replace(" ", ".").Replace("#", "");
+        var sensorName = SanitizeStateSegment(sensor.Name);
         var indexNum = hw.Index > 0 ? hw.Index.ToString() : "";
 
         // State ID remains unchanged for backwards compatibility
@@ -1267,6 +1298,13 @@ class Program
         {
             LogDebug($"[FPS] read failed: {ex.Message}");
             return;
+        }
+
+        if (_debugLogging)
+        {
+            LogDebug(reading.HasValue
+                ? $"[FPS] value={reading.Value.Fps:F1} source={reading.Value.Source} app={reading.Value.ProcessName}"
+                : $"[FPS] no reading (mode={_fpsMode}, rtssAvail={_fpsService.RtssAvailable}, pmRunning={_fpsService.PresentMonRunning}, etwRunning={_fpsService.EtwRunning})");
         }
 
         const string group = "FPS";

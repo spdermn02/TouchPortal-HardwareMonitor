@@ -22,7 +22,7 @@ Turn your PC's live hardware sensors — **CPU, GPU, RAM, storage, network, moth
   - `….unit` — always available (°C/°F, %, W, MHz, RPM, GB, …)
   - `….min` / `….max` — lowest/highest observed value
 - 🖥️ **Display states** — refresh rate (Hz), resolution, name and primary flag per monitor. *No driver, no elevation.*
-- 🎮 **FPS states** — foreground-app frame rate, with a selectable source (**RTSS / in-process ETW / Auto**).
+- 🎮 **FPS states** — foreground-app frame rate, with a selectable source (**RTSS / PresentMon / in-process ETW / Auto**).
 - ⏱️ **Live settings** — changing the capture interval or FPS source applies immediately, no restart.
 - 🔢 **Stable hardware numbering** — persistent per-device indexes saved to `%AppData%\TouchPortalHardwareMonitor`, so `CPU1`, `GPU1`, `Network1`, … keep pointing at the same device across restarts and reinstalls.
 - 🧹 **Cleaner device list** — Windows network filter drivers and virtual/inactive adapters are filtered out; only hardware that reports sensors is published.
@@ -58,7 +58,7 @@ tp-hm.state.{TYPE}{index}.{SensorType}.{name}.min / .max
 |---|---|
 | `tp-hm.state.fps.value` (+ `.unit`) | `144` / `FPS` |
 | `tp-hm.state.fps.process` | `game.exe` |
-| `tp-hm.state.fps.source` | `RTSS` / `Built-in` |
+| `tp-hm.state.fps.source` | `RTSS` / `PresentMon` / `Built-in` |
 
 **Diagnostics state** (group **TP Hardware Monitor**):
 
@@ -116,7 +116,7 @@ The plugin launches elevated so it can read all sensors. Accept the Windows UAC 
 | Temperature Unit (C/F) | `C` | `C` / `F` | |
 | Normalize Throughput (B/s, KB/s, MB/s, GB/s) | `No` | `No` / `Yes` | Scales network throughput to a friendlier unit; adds a `.unit` state. |
 | Normalize Data (MB, GB) | `No` | `No` / `Yes` | Scales SmallData (e.g. VRAM) to a friendlier unit; adds a `.unit` state. |
-| **FPS Source (Off/RTSS/Built-in/Auto)** | `Auto` | `Off` / `RTSS` / `Built-in` / `Auto` | **Applies live.** `Auto` = RTSS if running, else in-process ETW. |
+| **FPS Source (Off/RTSS/PresentMon/Built-in/Auto)** | `Auto` | `Off` / `RTSS` / `PresentMon` / `Built-in` / `Auto` | **Applies live.** `Auto` = RTSS if running → PresentMon → in-process ETW. `PresentMon` and `Built-in` need Admin; `Built-in` is approximate. |
 
 > [!NOTE]
 > The v1.x **"Hardware Monitor To Use"** setting is gone — LibreHardwareMonitor is embedded, so there's no external source to choose.
@@ -178,6 +178,8 @@ The **`tp-hm.state.plugin.sensor_status`** state summarizes this in plain langua
 ```
 
 This publishes the self-contained plugin + launcher and packages them into `csharp-plugin\Installers\TouchPortalHardwareMonitor-Windows-<version>.tpp`, ready to import.
+
+On first run the script also **downloads [Intel PresentMon](https://github.com/GameTechDev/PresentMon) 1.10.0** (MIT) into `csharp-plugin\tools\` (gitignored, not committed) and bundles it for the accurate FPS backend. If the download is skipped/unavailable, the plugin still builds — only the `PresentMon` FPS source is unavailable.
 
 ---
 

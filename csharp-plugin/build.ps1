@@ -8,9 +8,31 @@ $publishDir = "$projectDir\bin\Release\net10.0\win-x64\publish"
 $launcherPublishDir = "$launcherDir\bin\Release\net10.0\win-x64\publish"
 $installersDir = "$PSScriptRoot\Installers"
 $pluginName = "TouchPortalHardwareMonitor"
-$version = "2.2.0"
+$version = "2.2.1"
+
+# PresentMon (Intel, MIT) is bundled for the accurate FPS backend. The binary
+# is NOT committed to the repo - it's downloaded here into tools\ (gitignored)
+# on first build and copied into the package.
+$toolsDir = "$PSScriptRoot\tools"
+$presentMonVersion = "1.10.0"
+$presentMonExe = "$toolsDir\PresentMon.exe"
+$presentMonUrl = "https://github.com/GameTechDev/PresentMon/releases/download/v$presentMonVersion/PresentMon-$presentMonVersion-x64.exe"
 
 Write-Host "Building Touch Portal Hardware Monitor C# Plugin v$version..." -ForegroundColor Cyan
+
+# Ensure PresentMon is available (download once)
+if (-not (Test-Path $presentMonExe)) {
+    Write-Host "Downloading PresentMon $presentMonVersion..." -ForegroundColor Yellow
+    New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
+    try {
+        Invoke-WebRequest -Uri $presentMonUrl -OutFile $presentMonExe
+        Write-Host "PresentMon downloaded to $presentMonExe" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "WARNING: Could not download PresentMon ($($_.Exception.Message))." -ForegroundColor Red
+        Write-Host "The PresentMon FPS backend will be unavailable in this build; RTSS/Built-in still work." -ForegroundColor Red
+    }
+}
 
 # Clean previous builds
 if (Test-Path $publishDir) {
@@ -45,6 +67,14 @@ Write-Host "Launcher build successful!" -ForegroundColor Green
 # Copy launcher to main publish directory
 Write-Host "Copying launcher to publish directory..." -ForegroundColor Yellow
 Copy-Item "$launcherPublishDir\TouchPortalHardwareMonitor-Launcher.exe" "$publishDir\"
+
+# Bundle PresentMon next to the plugin (if it was downloaded)
+if (Test-Path $presentMonExe) {
+    Write-Host "Bundling PresentMon..." -ForegroundColor Yellow
+    Copy-Item $presentMonExe "$publishDir\PresentMon.exe"
+} else {
+    Write-Host "PresentMon.exe not present - packaging without the PresentMon FPS backend." -ForegroundColor Yellow
+}
 
 # Create Installers directory
 if (-not (Test-Path $installersDir)) {

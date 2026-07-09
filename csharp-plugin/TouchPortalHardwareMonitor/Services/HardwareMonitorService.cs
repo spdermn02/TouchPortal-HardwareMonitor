@@ -25,6 +25,14 @@ public class HardwareMonitorService : IDisposable
         _computer.Open();
     }
 
+    // LibreHardwareMonitor sometimes returns hardware/sensor names with embedded
+    // control characters (e.g. NUL or form-feed in garbled DIMM part numbers).
+    // Strip them so they don't corrupt state IDs, logs, or Touch Portal display.
+    private static string Clean(string? value)
+        => string.IsNullOrEmpty(value)
+            ? string.Empty
+            : new string(value.Where(c => !char.IsControl(c)).ToArray()).Trim();
+
     public List<HardwareItem> GetHardware()
     {
         var result = new List<HardwareItem>();
@@ -39,7 +47,7 @@ public class HardwareMonitorService : IDisposable
             result.Add(new HardwareItem
             {
                 Identifier = hardware.Identifier.ToString(),
-                Name = hardware.Name,
+                Name = Clean(hardware.Name),
                 HardwareType = hardware.HardwareType.ToString()
             });
 
@@ -83,7 +91,7 @@ public class HardwareMonitorService : IDisposable
                 {
                     Parent = hardware.Identifier.ToString(),
                     Identifier = sensor.Identifier.ToString(),
-                    Name = sensor.Name,
+                    Name = Clean(sensor.Name),
                     SensorType = sensor.SensorType.ToString(),
                     Value = hasValue ? sensor.Value!.Value : float.NaN,
                     ValuePresent = hasValue,
