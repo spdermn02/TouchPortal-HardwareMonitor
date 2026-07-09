@@ -26,6 +26,7 @@ namespace TouchPortalHardwareMonitor;
 [JsonSerializable(typeof(TPCreateState))]
 [JsonSerializable(typeof(TPNotification))]
 [JsonSerializable(typeof(DiagnosticDump))]
+[JsonSerializable(typeof(GitHubRelease))]
 public partial class AppJsonContext : JsonSerializerContext
 {
 }

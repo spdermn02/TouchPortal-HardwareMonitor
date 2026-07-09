@@ -43,6 +43,19 @@ public class SensorItem
     public SensorStateInfo? StateId { get; set; }
 }
 
+// Minimal shape of the GitHub "latest release" API response, for update checks.
+public class GitHubRelease
+{
+    [JsonPropertyName("tag_name")]
+    public string TagName { get; set; } = string.Empty;
+
+    [JsonPropertyName("prerelease")]
+    public bool Prerelease { get; set; }
+
+    [JsonPropertyName("html_url")]
+    public string HtmlUrl { get; set; } = string.Empty;
+}
+
 // A connected display, sourced from Win32 (not LibreHardwareMonitor).
 public class DisplayInfo
 {

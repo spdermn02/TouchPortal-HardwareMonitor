@@ -98,7 +98,7 @@ class Program
             var dump = new DiagnosticDump
             {
                 Timestamp = DateTime.Now.ToString("o"),
-                PluginVersion = "2.2.2",
+                PluginVersion = CurrentVersion,
                 IsElevated = _isElevated,
                 SensorAccess = DetectSensorAccessStatus(rawSensorData).Message,
                 Settings = new DiagnosticSettings
@@ -229,7 +229,8 @@ class Program
     }
 
     private const string PluginId = "TP_HM";
-    private const string UpdateUrl = "https://raw.githubusercontent.com/spdermn02/TouchPortal-HardwareMonitor/main/package.json";
+    // Single source of truth for the running plugin version (dump, logs, update check).
+    private const string CurrentVersion = "2.2.2";
     private const string ReleaseUrl = "https://github.com/spdermn02/TouchPortal-HardwareMonitor/releases";
     private const string PawnIoUrl = "https://pawnio.eu";
     private const int MaxWaitTime = 60000;
@@ -239,6 +240,7 @@ class Program
     private static HardwareMonitorService? _hwService;
     private static PawnIoService? _pawnIo;
     private static bool _pawnIoJustInstalled = false;
+    private static readonly UpdateService _updateService = new();
     private static readonly Dictionary<string, HardwareItem> _hardware = new();
 
     private static int _captureInterval = 2000;
@@ -449,7 +451,7 @@ class Program
             return;
         }
 
-        Log("Touch Portal Hardware Monitor v2.2.2 starting...");
+        Log($"Touch Portal Hardware Monitor v{CurrentVersion} starting...");
 
         // Initialize log level from file (before anything else)
         InitializeLogLevel();
@@ -545,6 +547,9 @@ class Program
             {
                 SendPawnIoInstalledNotification();
             }
+
+            // Check for a newer release (non-blocking).
+            _ = CheckForUpdatesAsync();
 
             // Keep running
             await Task.Delay(Timeout.Infinite);
@@ -669,6 +674,30 @@ class Program
             {
                 _tpClient?.LogIt("ERROR", $"Failed to open PawnIO URL: {ex.Message}");
             }
+        }
+    }
+
+    private static async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            var newVersion = await _updateService.CheckForUpdateAsync(CurrentVersion, LogDebug);
+            if (!string.IsNullOrEmpty(newVersion))
+            {
+                Log($"Update available: {newVersion} (installed: {CurrentVersion})");
+                _tpClient?.SendNotification(
+                    $"{PluginId}_update_notification_{newVersion}",
+                    "Hardware Monitor Plugin Update Available",
+                    $"New Version: {newVersion}\n\nPlease update to get the latest bug fixes and new features.\n\nCurrent Installed Version: {CurrentVersion}",
+                    new List<TPNotificationOption>
+                    {
+                        new() { Id = $"{PluginId}_update_notification_go_to_download", Title = "Go To Download Location" }
+                    });
+            }
+        }
+        catch (Exception ex)
+        {
+            LogDebug($"[Update] check error: {ex.Message}");
         }
     }
 
